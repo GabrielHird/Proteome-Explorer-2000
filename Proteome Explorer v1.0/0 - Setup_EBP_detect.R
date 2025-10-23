@@ -5,6 +5,8 @@
 suppressPackageStartupMessages({
   library(shiny)
   library(shinyFiles)
+  library(conflicted)
+  conflicts_prefer(base::unname)
 })
 
 pipeline_dir <- normalizePath(file.path("Proteome Explorer v1.0", "ProteomeExplorer Pipeline"), winslash = "/", mustWork = TRUE)

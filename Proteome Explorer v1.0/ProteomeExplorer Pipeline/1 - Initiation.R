@@ -88,7 +88,8 @@ conflicts_prefer(QFeatures::longFormat,
                  dplyr::rename,
                  dplyr::setdiff,
                  dplyr::select,
-                 base::as.factor)
+                 base::as.factor,
+                 base::unname)
 
 # Folders -----------------------------------------------------------------
 
