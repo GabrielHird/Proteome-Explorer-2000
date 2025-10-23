@@ -100,6 +100,6 @@ Contact   = "gabriel.hirdman@med.lu.se"
 
 # Run ---------------------------------------------------------------------
 
-pipeline_dir <- "./ProteomeExplorer Pipeline"
+pipeline_dir <- "./Proteome Explorer v1.0/ProteomeExplorer Pipeline"
 options(pex_pipeline_dir = pipeline_dir)
 source(file.path(pipeline_dir, "1 - Initiation.R"))

@@ -51,7 +51,6 @@ suppressPackageStartupMessages({
   # Pathway
   library(clusterProfiler)
   library(org.Hs.eg.db)
-  library(pathfindR)
   library(enrichplot)
   library(GSVA)
   library(msigdbr)
@@ -123,11 +122,7 @@ source(file.path(pipeline_dir, "2 - Import.R"))
 
 source(file.path(pipeline_dir, "3 - Data preprocessing.R"))
 
-if(subtype == TRUE) {
-  source(file.path(pipeline_dir, "4 - Subtype DEA Analysis.R"))
-} else {
-  source(file.path(pipeline_dir, "4 - DEA Analysis.R"))
-}
+source(file.path(pipeline_dir, "4 - DEA Analysis.R"))
 
 source(file.path(pipeline_dir, "5 - Postprocessing.R"))
 
