@@ -116,7 +116,13 @@ if(!dir.exists(paths = results_data_folder)) {
 
 # Multicore ---------------------------------------------------------------
 
-n_cores <- parallel::detectCores() - 1
+available_cores <- parallel::detectCores()
+n_cores <- max(1L, available_cores - 1L)
+
+if (n_cores == 1L) {
+  message("Parallel processing disabled; using a single core.")
+}
+
 BiocParallel::register(BiocParallel::SnowParam(workers = n_cores), default = TRUE)
 
 # Run analysis ------------------------------------------------------------
