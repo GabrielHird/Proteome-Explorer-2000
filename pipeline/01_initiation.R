@@ -4,21 +4,22 @@
 
 # Import packages ---------------------------------------------------------
 
-pipeline_dir <- getOption("pex_pipeline_dir", default = "./Scripts/Proteome Explorer v1.0/ProteomeExplorer Pipeline")
-pipeline_dir <- normalizePath(pipeline_dir, winslash = "/", mustWork = FALSE)
+pipeline_dir <- getOption("pex_pipeline_dir", default = "./pipeline")
+pipeline_dir <- normalizePath(pipeline_dir, winslash = "/", mustWork = TRUE)
+repo_root <- normalizePath(file.path(pipeline_dir, ".."), winslash = "/", mustWork = TRUE)
 
 pipeline_env <- environment()
 
 suppressPackageStartupMessages({
 
   # Setup/helper
-  sys.source(file.path(pipeline_dir, "PExp - Functions.R"), envir = pipeline_env)
+  sys.source(file.path(repo_root, "R", "pipeline_functions.R"), envir = pipeline_env)
   library(dplyr)
   library(filenamer)
   library(data.table)
   library(BiocParallel)
   library(conflicted)
-  
+
   # Importing
   library(readr)
   library(readxl)
@@ -29,34 +30,34 @@ suppressPackageStartupMessages({
   library(msdap)
   library(QFeatures)
   library(stringr)
-    
+
   # Preprocessing
   library(NormalyzerDE)
   library(imputeLCMD)
   library(ProteoMM)
   library(sva)
   library(hexbin)
-  
+
   # DEA Analysis
   library(proDA)
   library(limma)
   library(DEqMS)
   library(msqrob2)
   library(msEmpiRe)
-    
+
   # Postprocessing
   library(ComplexHeatmap)
   library(ggrepel)
   library(uwot)
   library(mixOmics)
-  
+
   # Pathway
   library(clusterProfiler)
   library(org.Hs.eg.db)
   library(enrichplot)
   library(GSVA)
   library(msigdbr)
-  
+
   # InteractiveViz
   library(shiny)
   library(bslib)
@@ -69,7 +70,7 @@ suppressPackageStartupMessages({
   library(DT)
   library(queryup)
   library(bsicons)
-  
+
   # Publication Plots
   library(RColorBrewer)
   library(forcats)
@@ -77,7 +78,7 @@ suppressPackageStartupMessages({
   library(scales)
   library(GGally)
   library(hrbrthemes)
-  
+
 })
 
 pix <- function(n) {
@@ -121,27 +122,25 @@ BiocParallel::register(BiocParallel::SnowParam(workers = n_cores), default = TRU
 # Run analysis ------------------------------------------------------------
 
 
-sys.source(file.path(pipeline_dir, "2 - Import.R"), envir = pipeline_env)
+sys.source(file.path(pipeline_dir, "02_import.R"), envir = pipeline_env)
 
-sys.source(file.path(pipeline_dir, "3 - Data preprocessing.R"), envir = pipeline_env)
+sys.source(file.path(pipeline_dir, "03_data_preprocessing.R"), envir = pipeline_env)
 
 if(subtype == TRUE) {
-  sys.source(file.path(pipeline_dir, "4 - Subtype DEA Analysis.R"), envir = pipeline_env)
+  sys.source(file.path(pipeline_dir, "05_subtype_dea_analysis.R"), envir = pipeline_env)
 } else {
-  sys.source(file.path(pipeline_dir, "4 - DEA Analysis.R"), envir = pipeline_env)
+  sys.source(file.path(pipeline_dir, "04_dea_analysis.R"), envir = pipeline_env)
 }
 
-sys.source(file.path(pipeline_dir, "5 - Postprocessing.R"), envir = pipeline_env)
+sys.source(file.path(pipeline_dir, "06_postprocessing.R"), envir = pipeline_env)
 
-sys.source(file.path(pipeline_dir, "6 - Pathway analysis.R"), envir = pipeline_env)
+sys.source(file.path(pipeline_dir, "07_pathway_analysis.R"), envir = pipeline_env)
 
-sys.source(file.path(pipeline_dir, "7 - Export plots.R"), envir = pipeline_env)
+sys.source(file.path(pipeline_dir, "08_export_plots.R"), envir = pipeline_env)
 
 # Print report
-sys.source(file.path(pipeline_dir, "Final - Print report.R"), envir = pipeline_env)
+sys.source(file.path(pipeline_dir, "final_print_report.R"), envir = pipeline_env)
 
 if(Run_Interactive == TRUE) {
-  runApp(file.path(pipeline_dir, "InteractiveViz"))
+  runApp(file.path(repo_root, "app"))
 }
-
-
