@@ -53,6 +53,8 @@ print(paste0("Nr of peptides post filtering at group level: ", nrow(rowData(qf[[
 
 # Normalization -----------------------------------------------------------
 
+normalizer_output <- file.path(results_folder, "normalyzer", paste0(Norm_method, "-normalized.txt"))
+
 if(Run_normalizer == TRUE) {
 # Run normalizer
 # De Log
@@ -71,17 +73,27 @@ normalyzer(jobName = "normalyzer",
 rm(SumExpObj)
 }
 
-# Import normalized data from Normalyzer
-df_norm <- fread(paste0(results_folder,"normalyzer/",Norm_method,"-normalized.txt")) %>%
-  column_to_rownames(var = "Stripped.Sequence") %>% 
-  dplyr::select(colData(qf)$runCol)
+if(Run_normalizer == TRUE || file.exists(normalizer_output)) {
+  if(!file.exists(normalizer_output)) {
+    stop(paste0("Normalyzer output not found at ", normalizer_output, 
+                ". Ensure Normalyzer completed successfully or provide the existing output."))
+  }
 
-se <- SummarizedExperiment(assays = list(counts = as.matrix(df_norm)))
-qf <- addAssay(qf, se, name = "PeptidesNorm")
-rowData(qf[["PeptidesNorm"]]) <- rowData(qf[["Peptides"]])
-qf <- addAssayLinkOneToOne(qf, from = "Peptides", to = "PeptidesNorm")
+  # Import normalized data from Normalyzer
+  df_norm <- fread(normalizer_output) %>%
+    column_to_rownames(var = "Stripped.Sequence") %>%
+    dplyr::select(colData(qf)$runCol)
 
-rm(df_norm, se)
+  se <- SummarizedExperiment(assays = list(counts = as.matrix(df_norm)))
+  qf <- addAssay(qf, se, name = "PeptidesNorm")
+  rowData(qf[["PeptidesNorm"]]) <- rowData(qf[["Peptides"]])
+  qf <- addAssayLinkOneToOne(qf, from = "Peptides", to = "PeptidesNorm")
+
+  rm(df_norm, se)
+} else {
+  qf <- addAssay(qf, qf[["Peptides"]], name = "PeptidesNorm")
+  qf <- addAssayLinkOneToOne(qf, from = "Peptides", to = "PeptidesNorm")
+}
 
 
 # (Optional Imputation) ---------------------------------------------------
