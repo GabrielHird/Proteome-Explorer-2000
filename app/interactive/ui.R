@@ -76,378 +76,386 @@ page_navbar(
       layout_columns(
         col_widths = c(12),
         card(
-          card_header("Project information"),
-          layout_columns(
-            col_widths = c(6, 6),
-            textInput("project_name", "Project name", value = "PExA Lungcancer v6"),
-            textInput("analysis_run", "Analysis run", value = "EBP_v1_detect")
-          ),
-          layout_columns(
-            col_widths = c(6,6),
-            textInput("your_name", "Your name", value = "Gabriel Hirdman"),
-            textInput("lab_name", "Lab name", value = "Lindstedt Lab")
-          ),
-          textInput("contact", "Contact", value = "gabriel.hirdman@med.lu.se")
-        ),
-        card(
-          card_header("Run settings"),
-          layout_columns(
-            col_widths = c(4,4,4),
-            checkboxInput("first_pass", "First pass", value = TRUE),
-            checkboxInput("run_normalizer", "Run normalizer", value = TRUE),
-            checkboxInput("run_dea", "Run DEA", value = TRUE)
-          ),
-          layout_columns(
-            col_widths = c(4,4,4),
-            checkboxInput("run_gsea", "Run GSEA", value = TRUE),
-            checkboxInput("save_plots", "Save plots", value = TRUE)
-          ),
-          layout_columns(
-            col_widths = c(4,4,4),
-            checkboxInput("export_data", "Export data", value = TRUE),
-            checkboxInput("subtype", "Subtype analysis", value = FALSE),
-            checkboxInput("run_interactive", "Launch dashboard after run", value = FALSE)
-          )
-        ),
-        card(
-          card_header("Group setup"),
-          layout_columns(
-            col_widths = c(6,6),
-            textInput("treatment_group", "Treatment group", value = "Cancer"),
-            textInput("reference_group", "Reference group", value = "Normal")
-          )
-        ),
-        card(
-          card_header("Filtering"),
-          layout_columns(
-            col_widths = c(6,6),
-            numericInput("import_qval", "Import q-value", value = 0.01, min = 0, step = 0.001),
-            numericInput("import_pg_qval", "Import protein group q-value", value = 0.01, min = 0, step = 0.001)
-          ),
-          layout_columns(
-            col_widths = c(4,4,4),
-            numericInput("group_treshold", "Group threshold", value = 0.75, min = 0, max = 1, step = 0.05),
-            numericInput("global_treshold", "Global threshold", value = 0.6, min = 0, max = 1, step = 0.05),
-            selectInput("treshold_level", "Threshold level", choices = c("Group", "Global"), selected = "Group")
-          ),
-          checkboxInput("peptide_level", "Peptide level filtering", value = TRUE)
-        ),
-        card(
-          card_header("Normalization"),
-          layout_columns(
-            col_widths = c(6,6),
-            selectInput(
-              "norm_method",
-              "Normalization method",
-              choices = c("CycLoess", "mean", "median", "Quantile", "RLR", "GI", "log2", "VSN"),
-              selected = "CycLoess"
+          card_header("Analysis settings"),
+          div(
+            class = "mb-4",
+            tags$h5("Project information"),
+            layout_columns(
+              col_widths = c(6, 6),
+              textInput("project_name", "Project name", value = "PExA Lungcancer v6"),
+              textInput("analysis_run", "Analysis run", value = "EBP_v1_detect")
             ),
-            selectInput(
-              "batch_corr",
-              "Batch correction",
-              choices = c("eigenms", "sva", "comBat", "none"),
-              selected = "eigenms"
+            layout_columns(
+              col_widths = c(6, 6),
+              textInput("your_name", "Your name", value = "Gabriel Hirdman"),
+              textInput("lab_name", "Lab name", value = "Lindstedt Lab")
+            ),
+            textInput("contact", "Contact", value = "gabriel.hirdman@med.lu.se")
+          ),
+          tags$hr(),
+          div(
+            class = "mb-4",
+            tags$h5("Run options"),
+            layout_columns(
+              col_widths = c(4, 4, 4),
+              checkboxInput("first_pass", "First pass", value = TRUE),
+              checkboxInput("run_normalizer", "Run normalizer", value = TRUE),
+              checkboxInput("run_dea", "Run DEA", value = TRUE)
+            ),
+            layout_columns(
+              col_widths = c(4, 4, 4),
+              checkboxInput("run_gsea", "Run GSEA", value = TRUE),
+              checkboxInput("save_plots", "Save plots", value = TRUE),
+              checkboxInput("export_data", "Export data", value = TRUE)
+            ),
+            layout_columns(
+              col_widths = c(4, 4, 4),
+              checkboxInput("subtype", "Subtype analysis", value = FALSE),
+              checkboxInput("run_interactive", "Launch dashboard after run", value = FALSE)
             )
-          )
-        ),
-        card(
-          card_header("Aggregation"),
-          selectInput(
-            "agg_method",
-            "Aggregation method",
-            choices = c("maxlfq", "robustsummary", "medianpolish"),
-            selected = "robustsummary"
-          )
-        ),
-        card(
-          card_header("Imputation"),
-          layout_columns(
-            col_widths = c(4,4,4),
-            checkboxInput("impute", "Enable imputation", value = FALSE),
-            textInput("impute_mar", "MAR method", value = ""),
-            textInput("impute_mnar", "MNAR method", value = "")
           ),
-          textInput("impute_method", "Combined imputation method", value = "")
-        ),
-        card(
-          card_header("DEA analysis"),
-          layout_columns(
-            col_widths = c(6,6),
-            selectInput("dea_method", "DEA method", choices = c("proDA", "limma", "DEqMS", "msqrob", "msempire"), selected = "msqrob"),
-            selectInput("study_design", "Study design", choices = c("unpaired", "paired"), selected = "unpaired")
-          ),
-          layout_columns(
-            col_widths = c(6,6),
-            numericInput("alpha", "Alpha (FDR)", value = 0.05, min = 0, max = 1, step = 0.01),
-            textInput("logfc_cutoff", "logFC cutoff", value = "")
-          )
-        ),
-        card(
-          card_header("Pathway"),
-          textInput("org_db", "Organism database", value = "org.Hs.eg.db")
-        ),
-        card(
-          card_header("Points of interest"),
-          layout_columns(
-            col_widths = c(6,6),
-            textInput("boxplot_prot", "Boxplot proteins (comma separated)", value = "CSTA"),
-            textInput("agg_prot", "Aggregation proteins (comma separated)", value = "CSTA")
-          )
-        ),
-        card(
-          card_header("Colors"),
-          textAreaInput(
-            "group_colors",
-            "Group colors (one per line: Group = #HEX)",
-            value = "Cancer = #FABC3C\nNormal = #006D77",
-            rows = 3
-          ),
-          textAreaInput(
-            "expression_lvl_color",
-            "Expression level colors (Name = #HEX)",
-            value = "OVER = #CB4335\nUNDER = #2E86C1",
-            rows = 2
-          )
-        ),
-        card(
-          card_header("Heatmap annotations"),
-          textAreaInput(
-            "heatmap_annot",
-            "Annotation mappings (Label = column)",
-            value = "Group = group\nBatch = Extraction_batch\nStudy = Study\nMembrane = PExA_membrane",
-            rows = 4
-          )
-        ),
-        card(
-          card_header("Data paths"),
+          tags$hr(),
           div(
-            class = "mb-3",
-            style = "display: flex; gap: 0.5rem; align-items: flex-end;",
-            div(style = "flex: 1;", textInput("dia_path", "DIA-NN report path", value = "./Data/DIA-NN output/diann_report_EBP.tsv")),
-            shinyFiles::shinyFilesButton("dia_path_browse", label = "Browse…", title = "Select DIA-NN report", multiple = FALSE, class = "btn btn-default")
+            class = "mb-4",
+            tags$h5("Group setup"),
+            layout_columns(
+              col_widths = c(6, 6),
+              textInput("treatment_group", "Treatment group", value = "Cancer"),
+              textInput("reference_group", "Reference group", value = "Normal")
+            )
           ),
+          tags$hr(),
           div(
-            class = "mb-3",
-            style = "display: flex; gap: 0.5rem; align-items: flex-end;",
-            div(style = "flex: 1;", textInput("fasta_path", "FASTA path", value = "./Data/FASTA file/EBP.fasta")),
-            shinyFiles::shinyFilesButton("fasta_path_browse", label = "Browse…", title = "Select FASTA file", multiple = FALSE, class = "btn btn-default")
+            class = "mb-4",
+            tags$h5("Filtering"),
+            layout_columns(
+              col_widths = c(6, 6),
+              numericInput("import_qval", "Import q-value", value = 0.01, min = 0, step = 0.001),
+              numericInput("import_pg_qval", "Import protein group q-value", value = 0.01, min = 0, step = 0.001)
+            ),
+            layout_columns(
+              col_widths = c(4, 4, 4),
+              numericInput("group_treshold", "Group threshold", value = 0.75, min = 0, max = 1, step = 0.05),
+              numericInput("global_treshold", "Global threshold", value = 0.6, min = 0, max = 1, step = 0.05),
+              selectInput("treshold_level", "Threshold level", choices = c("Group", "Global"), selected = "Group")
+            ),
+            checkboxInput("peptide_level", "Peptide level filtering", value = TRUE)
           ),
+          tags$hr(),
           div(
-            class = "mb-3",
-            style = "display: flex; gap: 0.5rem; align-items: flex-end;",
-            div(style = "flex: 1;", textInput("sample_path", "Sample metadata path", value = "./Data/Sample Metadata/EBP_sample_data.xlsx")),
-            shinyFiles::shinyFilesButton("sample_path_browse", label = "Browse…", title = "Select sample metadata", multiple = FALSE, class = "btn btn-default")
+            class = "mb-4",
+            tags$h5("Normalization"),
+            layout_columns(
+              col_widths = c(6, 6),
+              selectInput(
+                "norm_method",
+                "Normalization method",
+                choices = c("CycLoess", "mean", "median", "Quantile", "RLR", "GI", "log2", "VSN"),
+                selected = "CycLoess"
+              ),
+              selectInput(
+                "batch_corr",
+                "Batch correction",
+                choices = c("eigenms", "sva", "comBat", "none"),
+                selected = "eigenms"
+              )
+            )
+          ),
+          tags$hr(),
+          div(
+            class = "mb-4",
+            tags$h5("Aggregation"),
+            selectInput(
+              "agg_method",
+              "Aggregation method",
+              choices = c("maxlfq", "robustsummary", "medianpolish"),
+              selected = "robustsummary"
+            )
+          ),
+          tags$hr(),
+          div(
+            class = "mb-4",
+            tags$h5("Imputation"),
+            layout_columns(
+              col_widths = c(4, 4, 4),
+              checkboxInput("impute", "Enable imputation", value = FALSE),
+              textInput("impute_mar", "MAR method", value = ""),
+              textInput("impute_mnar", "MNAR method", value = "")
+            ),
+            textInput("impute_method", "Combined imputation method", value = "")
+          ),
+          tags$hr(),
+          div(
+            class = "mb-4",
+            tags$h5("DEA analysis"),
+            layout_columns(
+              col_widths = c(6, 6),
+              selectInput("dea_method", "DEA method", choices = c("proDA", "limma", "DEqMS", "msqrob", "msempire"), selected = "msqrob"),
+              selectInput("study_design", "Study design", choices = c("unpaired", "paired"), selected = "unpaired")
+            ),
+            layout_columns(
+              col_widths = c(6, 6),
+              numericInput("alpha", "Alpha (FDR)", value = 0.05, min = 0, max = 1, step = 0.01),
+              textInput("logfc_cutoff", "logFC cutoff", value = "")
+            )
+          ),
+          tags$hr(),
+          div(
+            class = "mb-4",
+            tags$h5("Pathway"),
+            textInput("org_db", "Organism database", value = "org.Hs.eg.db")
+          ),
+          tags$hr(),
+          div(
+            class = "mb-4",
+            tags$h5("Points of interest"),
+            layout_columns(
+              col_widths = c(6, 6),
+              textInput("boxplot_prot", "Boxplot proteins (comma separated)", value = "CSTA"),
+              textInput("agg_prot", "Aggregation proteins (comma separated)", value = "CSTA")
+            )
+          ),
+          tags$hr(),
+          div(
+            class = "mb-4",
+            tags$h5("Colors"),
+            layout_columns(
+              col_widths = c(6, 6),
+              textAreaInput(
+                "group_colors",
+                "Group colors (one per line: Group = #HEX)",
+                value = "Cancer = #FABC3C
+Normal = #006D77",
+                rows = 3
+              ),
+              textAreaInput(
+                "expression_lvl_color",
+                "Expression level colors (Name = #HEX)",
+                value = "OVER = #CB4335
+UNDER = #2E86C1",
+                rows = 2
+              )
+            )
+          ),
+          tags$hr(),
+          div(
+            class = "mb-4",
+            tags$h5("Heatmap annotations"),
+            textAreaInput(
+              "heatmap_annot",
+              "Annotation mappings (Label = column)",
+              value = "Group = group
+Batch = Extraction_batch
+Study = Study
+Membrane = PExA_membrane",
+              rows = 4
+            )
+          ),
+          tags$hr(),
+          div(
+            tags$h5("Data paths"),
+            div(
+              class = "mb-3",
+              style = "display: flex; gap: 0.5rem; align-items: flex-end;",
+              div(style = "flex: 1;", textInput("dia_path", "DIA-NN report path", value = "./Data/DIA-NN output/diann_report_EBP.tsv")),
+              shinyFiles::shinyFilesButton("dia_path_browse", label = "Browse…", title = "Select DIA-NN report", multiple = FALSE, class = "btn btn-default")
+            ),
+            div(
+              class = "mb-3",
+              style = "display: flex; gap: 0.5rem; align-items: flex-end;",
+              div(style = "flex: 1;", textInput("fasta_path", "FASTA path", value = "./Data/FASTA file/EBP.fasta")),
+              shinyFiles::shinyFilesButton("fasta_path_browse", label = "Browse…", title = "Select FASTA file", multiple = FALSE, class = "btn btn-default")
+            ),
+            div(
+              class = "mb-3",
+              style = "display: flex; gap: 0.5rem; align-items: flex-end;",
+              div(style = "flex: 1;", textInput("sample_path", "Sample metadata path", value = "./Data/Sample Metadata/EBP_sample_data.xlsx")),
+              shinyFiles::shinyFilesButton("sample_path_browse", label = "Browse…", title = "Select sample metadata", multiple = FALSE, class = "btn btn-default")
+            )
           )
         )
       )
-    )
-  ),
-
-
-# Identifications ---------------------------------------------------------
+  )
 
   nav_panel(
-    "Identifications",
-    layout_sidebar(
-      sidebar = sidebar(
-        title = "Identifications Controls",
-        uiOutput("bar_color_input"),
-        uiOutput("bar_sort_input"),
-        actionButton("updateBar", "Update Plot")
-      ),
-      card(
-        full_screen = TRUE,
-        card_header("Identifications Barplot"),
-        div(style = "display: inline-block; margin-bottom: 10px;",
-            downloadButton("download_barplot", "Download Plot (.png)", class = "btn btn-default", style = "width: auto;")
-        ),
-        plotOutput("barplot")
-      )
-    )
-  ),
-  
-
-# Missing values ----------------------------------------------------------
-
-  nav_panel(
-    "Missing Values",
-    card(
-      full_screen = TRUE,
-      card_header("Missing Values Map"),
-      div(style = "display: inline-block; margin-bottom: 10px;",
-          downloadButton("download_missMap", "Download Plot (.png)", class = "btn btn-default", style = "width: auto;")
-      ),
-      plotOutput("missMap")
-    )
-  ),
-  
-
-
-# Normalization ----------------------------------------------------------
-
-  nav_panel(
-    "Normalisation",
-    layout_columns(
-      fill = FALSE,
-      col_widths = c(2, 10),
-      value_box(
-        title = "Normalization method:",
-        value = textOutput("norm_method_display"),
-        showcase = bs_icon("clipboard-check-fill"),
-        showcase_layout = c("left center"),
-        theme = "primary",
-        max_height = "200px"
-      ),
-      tagList(
-        layout_columns(
-          col_widths = c(6,6),
-          norm_cards[[1]],
-          norm_cards[[2]]
-        ),
-        layout_columns(
-          col_widths = c(6,6),
-          norm_cards[[3]],
-          norm_cards[[4]]
-        )
-      )
-    )
-  ),
-      
-# Protein -----------------------------------------------------------------
-
-  nav_panel(
-    "Protein",
-    layout_sidebar(
-      sidebar = sidebar(
-        title = "Select protein",
-        uiOutput("gene_selector"),
-        actionButton("updateAgg", "Update Plot")
-      ),
-      layout_columns(
-        col_widths = c(6,6),
-        
-        # Left column
-        layout_columns(
-          col_widths = c(12,12),
-          row_heights = c(1,1),
-          
-          # First row: boxplot and table side-by-side
-          layout_columns(
-            col_widths = c(6,6),
-            card(
-              full_screen = TRUE,
-              card_header("Boxplot"),
-              plotOutput("prot_boxplot")
-            ),
-            card(
-              full_screen = TRUE,
-              card_header("Protein Details"),
-              uiOutput("protein_info")
-            )
+    "Results",
+    navset_tab(
+      nav_panel(
+        "Identifications",
+        layout_sidebar(
+          sidebar = sidebar(
+            title = "Identifications Controls",
+            uiOutput("bar_color_input"),
+            uiOutput("bar_sort_input"),
+            actionButton("updateBar", "Update Plot")
           ),
-          
-          # Second row: Protein Aggregation Plot
           card(
             full_screen = TRUE,
-            card_header("Protein Aggregation Plot"),
-            plotOutput("aggregationPlot")
+            card_header("Identifications Barplot"),
+            div(
+              style = "display: inline-block; margin-bottom: 10px;",
+              downloadButton("download_barplot", "Download Plot (.png)", class = "btn btn-default", style = "width: auto;")
+            ),
+            plotOutput("barplot")
           )
-        ),
-        
-        # Right column remains the Volcano Plot
+        )
+      ),
+      nav_panel(
+        "Missing Values",
+        card(
+          full_screen = TRUE,
+          card_header("Missing Values Map"),
+          div(
+            style = "display: inline-block; margin-bottom: 10px;",
+            downloadButton("download_missMap", "Download Plot (.png)", class = "btn btn-default", style = "width: auto;")
+          ),
+          plotOutput("missMap")
+        )
+      ),
+      nav_panel(
+        "Normalisation",
+        layout_columns(
+          fill = FALSE,
+          col_widths = c(2, 10),
+          value_box(
+            title = "Normalization method:",
+            value = textOutput("norm_method_display"),
+            showcase = bs_icon("clipboard-check-fill"),
+            showcase_layout = c("left center"),
+            theme = "primary",
+            max_height = "200px"
+          ),
+          tagList(
+            layout_columns(
+              col_widths = c(6, 6),
+              norm_cards[[1]],
+              norm_cards[[2]]
+            ),
+            layout_columns(
+              col_widths = c(6, 6),
+              norm_cards[[3]],
+              norm_cards[[4]]
+            )
+          )
+        )
+      ),
+      nav_panel(
+        "Protein",
+        layout_sidebar(
+          sidebar = sidebar(
+            title = "Select protein",
+            uiOutput("gene_selector"),
+            actionButton("updateAgg", "Update Plot")
+          ),
+          layout_columns(
+            col_widths = c(6, 6),
+            layout_columns(
+              col_widths = c(12, 12),
+              row_heights = c(1, 1),
+              layout_columns(
+                col_widths = c(6, 6),
+                card(
+                  full_screen = TRUE,
+                  card_header("Boxplot"),
+                  plotOutput("prot_boxplot")
+                ),
+                card(
+                  full_screen = TRUE,
+                  card_header("Protein Details"),
+                  uiOutput("protein_info")
+                )
+              ),
+              card(
+                full_screen = TRUE,
+                card_header("Protein Aggregation Plot"),
+                plotOutput("aggregationPlot")
+              )
+            ),
+            card(
+              full_screen = TRUE,
+              card_header("Volcano Plot"),
+              plotlyOutput("volcanoPlotProt")
+            )
+          )
+        )
+      ),
+      nav_panel(
+        "Statistics Table",
+        DTOutput("results_table")
+      ),
+      nav_panel(
+        "Heatmap",
+        layout_sidebar(
+          sidebar = sidebar(
+            title = "Heatmap Annotation Controls",
+            uiOutput("heatmap_annotations"),
+            actionButton("updateHeatmap", "Update Heatmap")
+          ),
+          card(
+            full_screen = TRUE,
+            card_header(
+              "Heatmap",
+              tabsetPanel(
+                id = "plot_tab",
+                type = "pills",
+                selected = "custom",
+                tabPanel("All Identifications", value = "default"),
+                tabPanel("Significant", value = "custom")
+              )
+            ),
+            card_body(
+              conditionalPanel(
+                condition = "input.plot_tab == 'default'",
+                div(
+                  style = "float: right; margin-bottom: 10px;",
+                  downloadButton("download_heatmap_full", "Download Plot (.png)", class = "btn btn-default", style = "width: auto;")
+                ),
+                plotOutput("defaultHeatmapPlot", height = "1000px")
+              ),
+              conditionalPanel(
+                condition = "input.plot_tab == 'custom'",
+                sliderInput(
+                  inputId = "n_value",
+                  label = "Set number for n",
+                  min = 1,
+                  max = 100,
+                  value = 50
+                ),
+                div(
+                  style = "float: right; margin-bottom: 10px;",
+                  downloadButton("download_heatmap_sig", "Download Plot (.png)", class = "btn btn-default", style = "width: auto;")
+                ),
+                plotOutput("customHeatmapPlot", height = "1000px")
+              )
+            )
+          )
+        )
+      ),
+      nav_panel(
+        "Volcano",
         card(
           full_screen = TRUE,
           card_header("Volcano Plot"),
-          plotlyOutput("volcanoPlotProt")
-        )
-      )
-    )
-  ),
-
-
-# Stats table -------------------------------------------------------------
-
-  nav_panel(
-    "Statistics Table",
-    DTOutput("results_table")
-  ),
-  
-# Heatmap -----------------------------------------------------------
-
-  nav_panel(
-    "Heatmap",
-    layout_sidebar(
-      sidebar = sidebar(
-        title = "Heatmap Annotation Controls",
-        uiOutput("heatmap_annotations"),
-        actionButton("updateHeatmap", "Update Heatmap")
-      ),
-      card(
-        full_screen = TRUE,
-        card_header(
-          "Heatmap",
-          tabsetPanel(
-            id = "plot_tab",    # used to track which tab is active
-            type = "pills",     # gives you the pill-style tabs
-            selected = "custom",  # make "custom" the default active tab
-            tabPanel("All Identifications", value = "default"),
-            tabPanel("Significant", value = "custom")
-          )
-        ),
-        card_body(
-          conditionalPanel(
-            condition = "input.plot_tab == 'default'",
-            div(style = "float: right; margin-bottom: 10px;",
-                downloadButton("download_heatmap_full", "Download Plot (.png)", class = "btn btn-default", style = "width: auto;")
-            ),
-            plotOutput("defaultHeatmapPlot", height = "1000px")
+          div(
+            style = "display: inline-block; margin-bottom: 10px;",
+            downloadButton("download_volcano", "Download Plot (.png)", class = "btn btn-default", style = "width: auto;")
           ),
-          conditionalPanel(
-            condition = "input.plot_tab == 'custom'",
-            # Use sliderInput with a reactive max in the server (if needed)
-            sliderInput(
-              inputId = "n_value", 
-              label = "Set number for n", 
-              min = 1, 
-              max = 100,    # placeholder max; update it reactively in the server if necessary
-              value = 50
-            ),
-            div(style = "float: right; margin-bottom: 10px;",
-                downloadButton("download_heatmap_sig", "Download Plot (.png)", class = "btn btn-default", style = "width: auto;")
-            ),
-            plotOutput("customHeatmapPlot", height = "1000px"))
-          )
+          plotOutput("volcanoPlot")
+        )
+      ),
+      nav_panel(
+        "PCA",
+        card(
+          full_screen = TRUE,
+          card_header("PCA Plot"),
+          div(
+            style = "display: inline-block; margin-bottom: 10px;",
+            downloadButton("download_pca", "Download Plot (.png)", class = "btn btn-default", style = "width: auto;")
+          ),
+          plotOutput("pcaPlot")
         )
       )
-    ),
-
-
-# Stats results -----------------------------------------------------------
-
-  nav_panel(
-    "Volcano",
-    card(
-      full_screen = TRUE,
-      card_header("Volcano Plot"),
-      div(style = "display: inline-block; margin-bottom: 10px;",
-          downloadButton("download_volcano", "Download Plot (.png)", class = "btn btn-default", style = "width: auto;")
-      ),
-      plotOutput("volcanoPlot")
     )
   ),
-  
 
-# PCA ---------------------------------------------------------------------
-
-  nav_panel(
-    "PCA",
-    card(
-      full_screen = TRUE,
-      card_header("PCA Plot"),
-      div(style = "display: inline-block; margin-bottom: 10px;",
-          downloadButton("download_pca", "Download Plot (.png)", class = "btn btn-default", style = "width: auto;")
-      ),
-      plotOutput("pcaPlot")
-    )
-  )
 )

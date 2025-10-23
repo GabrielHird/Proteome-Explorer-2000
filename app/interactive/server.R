@@ -6,19 +6,22 @@
 
 function(input, output, session) {
 
-  repo_root <- get0("repo_root", ifnotfound = NULL, inherits = TRUE)
-  if (is.null(repo_root) || !dir.exists(repo_root)) {
+  repo_root <- get0(
+    "repo_root",
+    ifnotfound = normalizePath("..", winslash = "/", mustWork = FALSE),
+    inherits = TRUE
+  )
+  repo_root <- normalizePath(repo_root, winslash = "/", mustWork = FALSE)
+  if (!dir.exists(repo_root)) {
     repo_root <- normalizePath(".", winslash = "/", mustWork = TRUE)
-  } else {
-    repo_root <- normalizePath(repo_root, winslash = "/", mustWork = TRUE)
   }
 
-  pipeline_dir <- get0("pipeline_dir", ifnotfound = NULL, inherits = TRUE)
-  if (is.null(pipeline_dir) || !dir.exists(pipeline_dir)) {
-    pipeline_dir <- normalizePath(file.path(repo_root, "pipeline"), winslash = "/", mustWork = TRUE)
-  } else {
-    pipeline_dir <- normalizePath(pipeline_dir, winslash = "/", mustWork = TRUE)
-  }
+  pipeline_dir <- get0(
+    "pipeline_dir",
+    ifnotfound = file.path(repo_root, "pipeline"),
+    inherits = TRUE
+  )
+  pipeline_dir <- normalizePath(pipeline_dir, winslash = "/", mustWork = FALSE)
 
   default_config <- list(
     Project_name = "PExA Lungcancer v6",
@@ -136,27 +139,19 @@ function(input, output, session) {
     htmltools::span(text, class = paste("badge", classes))
   }
 
-  is_absolute_path <- function(path) {
-    if (!nzchar(path)) {
-      return(FALSE)
-    }
-    if (.Platform$OS.type == "windows") {
-      grepl("^[A-Za-z]:[\\/]|^\\\\", path)
-    } else {
-      substr(path, 1, 1) == "/"
-    }
-  }
-
   resolve_path <- function(path) {
     path <- trimws(path %||% "")
     if (!nzchar(path)) {
       return("")
     }
     expanded <- path.expand(path)
-    if (!is_absolute_path(expanded)) {
-      expanded <- file.path(repo_root, expanded)
+    if (.Platform$OS.type == "windows") {
+      is_abs <- grepl("^[A-Za-z]:[\\/]|^\\\\", expanded)
+    } else {
+      is_abs <- substr(expanded, 1, 1) == "/"
     }
-    normalizePath(expanded, winslash = "/", mustWork = FALSE)
+    target <- if (is_abs) expanded else file.path(repo_root, expanded)
+    normalizePath(target, winslash = "/", mustWork = FALSE)
   }
 
   analysis_data <- reactiveValues(
