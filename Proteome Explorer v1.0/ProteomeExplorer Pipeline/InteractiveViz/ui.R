@@ -102,7 +102,6 @@ page_navbar(
           layout_columns(
             col_widths = c(4,4,4),
             checkboxInput("run_gsea", "Run GSEA", value = TRUE),
-            checkboxInput("run_pathfind", "Run pathfindR", value = FALSE),
             checkboxInput("save_plots", "Save plots", value = TRUE)
           ),
           layout_columns(
@@ -223,9 +222,24 @@ page_navbar(
         ),
         card(
           card_header("Data paths"),
-          textInput("dia_path", "DIA-NN report path", value = "./Data/DIA-NN output/diann_report_EBP.tsv"),
-          textInput("fasta_path", "FASTA path", value = "./Data/FASTA file/EBP.fasta"),
-          textInput("sample_path", "Sample metadata path", value = "./Data/Sample Metadata/EBP_sample_data.xlsx")
+          div(
+            class = "mb-3",
+            style = "display: flex; gap: 0.5rem; align-items: flex-end;",
+            div(style = "flex: 1;", textInput("dia_path", "DIA-NN report path", value = "./Data/DIA-NN output/diann_report_EBP.tsv")),
+            shinyFiles::shinyFilesButton("dia_path_browse", label = "Browse…", title = "Select DIA-NN report", multiple = FALSE, class = "btn btn-default")
+          ),
+          div(
+            class = "mb-3",
+            style = "display: flex; gap: 0.5rem; align-items: flex-end;",
+            div(style = "flex: 1;", textInput("fasta_path", "FASTA path", value = "./Data/FASTA file/EBP.fasta")),
+            shinyFiles::shinyFilesButton("fasta_path_browse", label = "Browse…", title = "Select FASTA file", multiple = FALSE, class = "btn btn-default")
+          ),
+          div(
+            class = "mb-3",
+            style = "display: flex; gap: 0.5rem; align-items: flex-end;",
+            div(style = "flex: 1;", textInput("sample_path", "Sample metadata path", value = "./Data/Sample Metadata/EBP_sample_data.xlsx")),
+            shinyFiles::shinyFilesButton("sample_path_browse", label = "Browse…", title = "Select sample metadata", multiple = FALSE, class = "btn btn-default")
+          )
         )
       )
     )
