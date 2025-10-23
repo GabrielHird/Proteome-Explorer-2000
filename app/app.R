@@ -14,32 +14,15 @@ suppressPackageStartupMessages({
   if (is.null(x)) y else x
 }
 
-get_app_dir <- function() {
-  cmd_args <- commandArgs(trailingOnly = FALSE)
-  file_arg <- "--file="
-  file_arg_idx <- grep(file_arg, cmd_args)
-  if (length(file_arg_idx) > 0) {
-    file_path <- sub(file_arg, "", cmd_args[file_arg_idx[1]])
-    return(dirname(normalizePath(file_path, winslash = "/", mustWork = TRUE)))
-  }
-  this_file <- NULL
-  for (i in rev(seq_len(sys.nframe()))) {
-    frame <- sys.frame(i)
-    if (!is.null(frame$ofile)) {
-      this_file <- frame$ofile
-      break
-    }
-  }
-  if (!is.null(this_file)) {
-    return(dirname(normalizePath(this_file, winslash = "/", mustWork = TRUE)))
-  }
-  normalizePath(getwd(), winslash = "/", mustWork = TRUE)
+cwd <- normalizePath(getwd(), winslash = "/", mustWork = TRUE)
+repo_candidate <- normalizePath(file.path(cwd, ".."), winslash = "/", mustWork = FALSE)
+if (!file.exists(file.path(repo_candidate, "pipeline"))) {
+  repo_candidate <- cwd
 }
-
-app_dir <- get_app_dir()
-repo_root <- normalizePath(file.path(app_dir, ".."), winslash = "/", mustWork = TRUE)
-pipeline_dir <- normalizePath(file.path(repo_root, "pipeline"), winslash = "/", mustWork = TRUE)
+repo_root <- normalizePath(repo_candidate, winslash = "/", mustWork = TRUE)
+app_dir <- normalizePath(file.path(repo_root, "app"), winslash = "/", mustWork = TRUE)
 interactive_dir <- normalizePath(file.path(app_dir, "interactive"), winslash = "/", mustWork = TRUE)
+pipeline_dir <- normalizePath(file.path(repo_root, "pipeline"), winslash = "/", mustWork = TRUE)
 
 ui_env <- new.env(parent = globalenv())
 ui <- source(file.path(interactive_dir, "ui.R"), local = ui_env)$value
