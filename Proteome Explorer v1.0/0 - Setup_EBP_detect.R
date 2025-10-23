@@ -4,6 +4,7 @@
 
 suppressPackageStartupMessages({
   library(shiny)
+  library(shinyFiles)
 })
 
 pipeline_dir <- normalizePath(file.path("Proteome Explorer v1.0", "ProteomeExplorer Pipeline"), winslash = "/", mustWork = TRUE)
@@ -16,7 +17,6 @@ default_config <- list(
   Run_normalizer = TRUE,
   Run_DEA = TRUE,
   Run_GSEA = TRUE,
-  run_pathfind = FALSE,
   save_plots = TRUE,
   export_data = TRUE,
   subtype = FALSE,
@@ -61,6 +61,29 @@ default_config <- list(
 
 `%||%` <- function(x, y) {
   if (is.null(x)) y else x
+}
+
+is_absolute_path <- function(path) {
+  if (!nzchar(path)) {
+    return(FALSE)
+  }
+  if (.Platform$OS.type == "windows") {
+    grepl("^[A-Za-z]:[\\/]|^\\\\", path)
+  } else {
+    substr(path, 1, 1) == "/"
+  }
+}
+
+resolve_path <- function(path) {
+  path <- trimws(path %||% "")
+  if (!nzchar(path)) {
+    return("")
+  }
+  expanded <- path.expand(path)
+  if (!is_absolute_path(expanded)) {
+    expanded <- file.path(repo_root, expanded)
+  }
+  normalizePath(expanded, winslash = "/", mustWork = FALSE)
 }
 
 parse_comma_list <- function(x) {
@@ -142,9 +165,24 @@ configuration_panel <- fluidRow(
       ),
       tabPanel(
         "Data",
-        textInput("dia_path", "DIA-NN report", value = default_config$DIA_nn_path),
-        textInput("fasta_path", "FASTA file", value = default_config$FASTA_path),
-        textInput("sample_path", "Sample metadata", value = default_config$Sample_data_path)
+        div(
+          class = "mb-3",
+          style = "display: flex; gap: 0.5rem; align-items: flex-end;",
+          div(style = "flex: 1;", textInput("dia_path", "DIA-NN report", value = default_config$DIA_nn_path)),
+          shinyFilesButton("dia_path_browse", label = "Browse…", title = "Select DIA-NN report", multiple = FALSE, class = "btn btn-default")
+        ),
+        div(
+          class = "mb-3",
+          style = "display: flex; gap: 0.5rem; align-items: flex-end;",
+          div(style = "flex: 1;", textInput("fasta_path", "FASTA file", value = default_config$FASTA_path)),
+          shinyFilesButton("fasta_path_browse", label = "Browse…", title = "Select FASTA file", multiple = FALSE, class = "btn btn-default")
+        ),
+        div(
+          class = "mb-3",
+          style = "display: flex; gap: 0.5rem; align-items: flex-end;",
+          div(style = "flex: 1;", textInput("sample_path", "Sample metadata", value = default_config$Sample_data_path)),
+          shinyFilesButton("sample_path_browse", label = "Browse…", title = "Select sample metadata", multiple = FALSE, class = "btn btn-default")
+        )
       ),
       tabPanel(
         "Run options",
@@ -152,7 +190,6 @@ configuration_panel <- fluidRow(
         checkboxInput("run_normalizer", "Run normalizer", value = default_config$Run_normalizer),
         checkboxInput("run_dea", "Run DEA", value = default_config$Run_DEA),
         checkboxInput("run_gsea", "Run GSEA", value = default_config$Run_GSEA),
-        checkboxInput("run_pathfind", "Run pathfindR", value = default_config$run_pathfind),
         checkboxInput("save_plots", "Save plots", value = default_config$save_plots),
         checkboxInput("export_data", "Export data", value = default_config$export_data),
         checkboxInput("subtype", "Subtype analysis", value = default_config$subtype),
@@ -222,6 +259,63 @@ server <- function(input, output, session) {
     analysis_state$logs <- c(analysis_state$logs, paste0(format(Sys.time(), "%H:%M:%S"), " - ", text))
   }
 
+  root_volume <- if (.Platform$OS.type == "windows") "C:/" else "/"
+  volumes <- c(
+    "Workspace" = repo_root,
+    "Home" = path.expand("~"),
+    "Root" = root_volume
+  )
+  volumes <- volumes[dir.exists(volumes)]
+  if (!length(volumes)) {
+    volumes <- c("Workspace" = repo_root)
+  }
+
+  shinyFiles::shinyFileChoose(
+    input,
+    id = "dia_path_browse",
+    session = session,
+    roots = volumes,
+    filetypes = c("", "tsv", "csv", "txt")
+  )
+  shinyFiles::shinyFileChoose(
+    input,
+    id = "fasta_path_browse",
+    session = session,
+    roots = volumes,
+    filetypes = c("", "fasta", "fa")
+  )
+  shinyFiles::shinyFileChoose(
+    input,
+    id = "sample_path_browse",
+    session = session,
+    roots = volumes,
+    filetypes = c("", "xlsx", "xls", "csv")
+  )
+
+  observeEvent(input$dia_path_browse, {
+    files <- shinyFiles::parseFilePaths(volumes, input$dia_path_browse)
+    if (nrow(files) > 0) {
+      path <- normalizePath(files$datapath[1], winslash = "/", mustWork = FALSE)
+      updateTextInput(session, "dia_path", value = path)
+    }
+  })
+
+  observeEvent(input$fasta_path_browse, {
+    files <- shinyFiles::parseFilePaths(volumes, input$fasta_path_browse)
+    if (nrow(files) > 0) {
+      path <- normalizePath(files$datapath[1], winslash = "/", mustWork = FALSE)
+      updateTextInput(session, "fasta_path", value = path)
+    }
+  })
+
+  observeEvent(input$sample_path_browse, {
+    files <- shinyFiles::parseFilePaths(volumes, input$sample_path_browse)
+    if (nrow(files) > 0) {
+      path <- normalizePath(files$datapath[1], winslash = "/", mustWork = FALSE)
+      updateTextInput(session, "sample_path", value = path)
+    }
+  })
+
   output$pipeline_status <- renderUI({
     status_text <- analysis_state$status
     status_class <- if (grepl("error|fail", tolower(status_text))) {
@@ -255,7 +349,6 @@ server <- function(input, output, session) {
     updateCheckboxInput(session, "run_normalizer", value = default_config$Run_normalizer)
     updateCheckboxInput(session, "run_dea", value = default_config$Run_DEA)
     updateCheckboxInput(session, "run_gsea", value = default_config$Run_GSEA)
-    updateCheckboxInput(session, "run_pathfind", value = default_config$run_pathfind)
     updateCheckboxInput(session, "save_plots", value = default_config$save_plots)
     updateCheckboxInput(session, "export_data", value = default_config$export_data)
     updateCheckboxInput(session, "subtype", value = default_config$subtype)
@@ -302,7 +395,6 @@ server <- function(input, output, session) {
       Run_normalizer = isTRUE(input$run_normalizer),
       Run_DEA = isTRUE(input$run_dea),
       Run_GSEA = isTRUE(input$run_gsea),
-      run_pathfind = isTRUE(input$run_pathfind),
       save_plots = isTRUE(input$save_plots),
       export_data = isTRUE(input$export_data),
       subtype = isTRUE(input$subtype),
@@ -332,9 +424,9 @@ server <- function(input, output, session) {
       Group_colors = parse_named_lines(input$group_colors),
       heatmap_annot = parse_named_lines(input$heatmap_annot),
       Expression_lvl_color = parse_named_lines(input$expression_lvl_color),
-      DIA_nn_path = input$dia_path,
-      FASTA_path = input$fasta_path,
-      Sample_data_path = input$sample_path,
+      DIA_nn_path = resolve_path(input$dia_path),
+      FASTA_path = resolve_path(input$fasta_path),
+      Sample_data_path = resolve_path(input$sample_path),
       Your_name = input$your_name,
       Lab_name = input$lab_name,
       Contact = input$contact
@@ -347,6 +439,21 @@ server <- function(input, output, session) {
 
     if (length(config$heatmap_annot) == 0) {
       showNotification("Please provide at least one heatmap annotation (Label = column).", type = "error")
+      return()
+    }
+
+    required_paths <- c(
+      "DIA-NN report" = config$DIA_nn_path,
+      "FASTA file" = config$FASTA_path,
+      "Sample metadata" = config$Sample_data_path
+    )
+
+    missing_paths <- names(required_paths)[!nzchar(unname(required_paths)) | !file.exists(unname(required_paths))]
+    if (length(missing_paths) > 0) {
+      msg <- paste0("Missing required file(s): ", paste(missing_paths, collapse = ", "), ".")
+      showNotification(msg, type = "error")
+      analysis_state$status <- "File validation failed"
+      append_log(msg)
       return()
     }
 
