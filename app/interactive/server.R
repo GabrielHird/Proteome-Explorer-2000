@@ -115,6 +115,27 @@ function(input, output, session) {
     if (is.null(x)) y else x
   }
 
+  build_status_badge <- function(text, variant) {
+    badge_fn <- NULL
+    if (exists("bs_badge", mode = "function")) {
+      badge_fn <- get("bs_badge", mode = "function")
+    } else if (exists("bs_badge", envir = asNamespace("bslib"), inherits = FALSE)) {
+      badge_fn <- get("bs_badge", envir = asNamespace("bslib"))
+    }
+
+    classes <- paste0("bg-", variant)
+
+    if (!is.null(badge_fn)) {
+      args <- list(text, class = classes)
+      if ("bs_theme" %in% names(formals(badge_fn))) {
+        args$bs_theme <- bslib::bs_theme()
+      }
+      return(do.call(badge_fn, args))
+    }
+
+    htmltools::span(text, class = paste("badge", classes))
+  }
+
   is_absolute_path <- function(path) {
     if (!nzchar(path)) {
       return(FALSE)
@@ -286,7 +307,7 @@ function(input, output, session) {
     )
     tagList(
       strong("Status:"),
-      bs_badge(status, bs_theme = bs_theme(), class = paste0("bg-", badge_status))
+      build_status_badge(status, badge_status)
     )
   })
 

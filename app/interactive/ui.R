@@ -54,7 +54,7 @@ page_navbar(
 
 
   nav_panel(
-    "Setup",
+    "Run Analysis",
     layout_sidebar(
       sidebar = sidebar(
         title = "Launch Analysis",
