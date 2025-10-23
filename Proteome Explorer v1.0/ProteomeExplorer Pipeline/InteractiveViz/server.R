@@ -6,8 +6,19 @@
 
 function(input, output, session) {
 
-  pipeline_dir <- normalizePath("..", winslash = "/", mustWork = TRUE)
-  repo_root <- normalizePath(file.path(pipeline_dir, "..", ".."), winslash = "/", mustWork = TRUE)
+  repo_root <- get0("repo_root", ifnotfound = NULL, inherits = TRUE)
+  if (is.null(repo_root) || !dir.exists(repo_root)) {
+    repo_root <- normalizePath(".", winslash = "/", mustWork = TRUE)
+  } else {
+    repo_root <- normalizePath(repo_root, winslash = "/", mustWork = TRUE)
+  }
+
+  pipeline_dir <- get0("pipeline_dir", ifnotfound = NULL, inherits = TRUE)
+  if (is.null(pipeline_dir) || !dir.exists(pipeline_dir)) {
+    pipeline_dir <- normalizePath(file.path(repo_root, "Proteome Explorer v1.0", "ProteomeExplorer Pipeline"), winslash = "/", mustWork = TRUE)
+  } else {
+    pipeline_dir <- normalizePath(pipeline_dir, winslash = "/", mustWork = TRUE)
+  }
 
   default_config <- list(
     Project_name = "PExA Lungcancer v6",
@@ -134,11 +145,22 @@ function(input, output, session) {
     config = default_config,
     logs = character(),
     status = "Awaiting analysis",
-    running = FALSE
+    running = FALSE,
+    plot_functions = list()
   )
 
   append_log <- function(text) {
-    analysis_data$logs <- c(analysis_data$logs, paste0(format(Sys.time(), "%H:%M:%S"), " - ", text))
+    if (length(text) == 0) {
+      return(invisible(NULL))
+    }
+    text <- text[!is.na(text)]
+    text <- text[nzchar(text)]
+    if (!length(text)) {
+      return(invisible(NULL))
+    }
+    timestamp <- format(Sys.time(), "%H:%M:%S")
+    analysis_data$logs <- c(analysis_data$logs, paste(timestamp, "-", text))
+    invisible(NULL)
   }
 
   root_volume <- if (.Platform$OS.type == "windows") "C:/" else "/"
@@ -317,6 +339,7 @@ function(input, output, session) {
       return()
     }
 
+    analysis_data$plot_functions <- list()
     analysis_data$running <- TRUE
     analysis_data$status <- "Running analysis..."
     analysis_data$logs <- character()
@@ -336,24 +359,31 @@ function(input, output, session) {
       }, add = TRUE)
       setwd(repo_root)
 
+      captured_output <- character()
       result <- tryCatch({
-        withCallingHandlers({
-          sys.source(file.path(pipeline_dir, "1 - Initiation.R"), envir = pipeline_env)
-        },
-        message = function(m) {
-          append_log(m$message)
-          invokeRestart("muffleMessage")
-        },
-        warning = function(w) {
-          append_log(paste0("Warning: ", w$message))
-          invokeRestart("muffleWarning")
-        })
+        captured_output <- capture.output({
+          withCallingHandlers({
+            sys.source(file.path(pipeline_dir, "1 - Initiation.R"), envir = pipeline_env)
+          },
+          message = function(m) {
+            append_log(m$message)
+            invokeRestart("muffleMessage")
+          },
+          warning = function(w) {
+            append_log(paste0("Warning: ", w$message))
+            invokeRestart("muffleWarning")
+          })
+        }, type = "output")
         TRUE
       }, error = function(e) {
         append_log(paste0("Error: ", e$message))
         showNotification(paste("Pipeline failed:", e$message), type = "error")
         FALSE
       })
+
+      if (length(captured_output)) {
+        append_log(captured_output)
+      }
 
       if (isTRUE(result) && exists("qf", envir = pipeline_env)) {
         analysis_data$qf <- pipeline_env$qf
@@ -362,6 +392,27 @@ function(input, output, session) {
         analysis_data$config <- config
         analysis_data$status <- "Analysis completed"
         append_log("Pipeline completed successfully")
+
+        required_functions <- c(
+          "Barplot_IDs",
+          "miss_map",
+          "Density_plotter",
+          "Norm_boxplotter",
+          "Aggregation_plotter",
+          "Boxplot_plotter",
+          "Volcano_plotter",
+          "Volcano_plotter_highlight",
+          "make_heatmap",
+          "PCA_plotter"
+        )
+
+        analysis_data$plot_functions <- lapply(setNames(required_functions, required_functions), function(fn) {
+          if (exists(fn, envir = pipeline_env, mode = "function")) {
+            get(fn, envir = pipeline_env)
+          } else {
+            NULL
+          }
+        })
       } else if (!isTRUE(result)) {
         analysis_data$status <- "Pipeline failed"
       } else {
@@ -455,7 +506,9 @@ function(input, output, session) {
 
   output$barplot <- renderPlot({
     req(analysis_data$qf, input$bar_color, input$bar_sort)
-    p <- Barplot_IDs(analysis_data$qf, i = "Proteins", color = input$bar_color, sort = input$bar_sort)
+    fn <- analysis_data$plot_functions[["Barplot_IDs"]]
+    req(is.function(fn))
+    p <- fn(analysis_data$qf, i = "Proteins", color = input$bar_color, sort = input$bar_sort)
     print(p)
   })
 
@@ -467,7 +520,9 @@ function(input, output, session) {
     content = function(file) {
       req(analysis_data$qf)
       png(file, width = 920, height = 550)
-      p <- Barplot_IDs(analysis_data$qf, i = "Proteins", color = input$bar_color, sort = input$bar_sort)
+      fn <- analysis_data$plot_functions[["Barplot_IDs"]]
+      req(is.function(fn))
+      p <- fn(analysis_data$qf, i = "Proteins", color = input$bar_color, sort = input$bar_sort)
       print(p)
       dev.off()
     }
@@ -477,34 +532,59 @@ function(input, output, session) {
 
   output$missMap <- renderPlot({
     req(analysis_data$qf)
-    p <- miss_map(analysis_data$qf, i = "Proteins")
+    fn <- analysis_data$plot_functions[["miss_map"]]
+    req(is.function(fn))
+    p <- fn(analysis_data$qf, i = "Proteins")
     print(p)
   })
+
+  output$download_missMap <- downloadHandler(
+    filename = function() {
+      req(analysis_data$results_folder)
+      paste0(analysis_data$results_folder, "missing_values_", Sys.Date(), ".png")
+    },
+    content = function(file) {
+      req(analysis_data$qf)
+      fn <- analysis_data$plot_functions[["miss_map"]]
+      req(is.function(fn))
+      png(file, width = 920, height = 550)
+      print(fn(analysis_data$qf, i = "Proteins"))
+      dev.off()
+    }
+  )
 
 
 # Normalization ----------------------------------------------------------
 
   output$pre_norm_dens <- renderPlotly({
     req(analysis_data$qf)
-    p <- Density_plotter(analysis_data$qf, i = "Peptides")
+    fn <- analysis_data$plot_functions[["Density_plotter"]]
+    req(is.function(fn))
+    p <- fn(analysis_data$qf, i = "Peptides")
     print(p)
   })
 
   output$post_norm_dens <- renderPlotly({
     req(analysis_data$qf)
-    p <- Density_plotter(analysis_data$qf, i = "PeptidesProccessed")
+    fn <- analysis_data$plot_functions[["Density_plotter"]]
+    req(is.function(fn))
+    p <- fn(analysis_data$qf, i = "PeptidesProccessed")
     print(p)
   })
 
   output$pre_norm_box <- renderPlot({
     req(analysis_data$qf)
-    p <- Norm_boxplotter(analysis_data$qf, i = "Peptides")
+    fn <- analysis_data$plot_functions[["Norm_boxplotter"]]
+    req(is.function(fn))
+    p <- fn(analysis_data$qf, i = "Peptides")
     print(p)
   })
 
   output$post_norm_box <- renderPlot({
     req(analysis_data$qf)
-    p <- Norm_boxplotter(analysis_data$qf, i = "PeptidesProccessed")
+    fn <- analysis_data$plot_functions[["Norm_boxplotter"]]
+    req(is.function(fn))
+    p <- fn(analysis_data$qf, i = "PeptidesProccessed")
     print(p)
   })
 
@@ -513,19 +593,25 @@ function(input, output, session) {
 
   output$aggregationPlot <- renderPlot({
     req(analysis_data$qf, input$gene)
-    p <- Aggregation_plotter(analysis_data$qf, input$gene)
+    fn <- analysis_data$plot_functions[["Aggregation_plotter"]]
+    req(is.function(fn))
+    p <- fn(analysis_data$qf, input$gene)
     print(p)
   })
 
   output$prot_boxplot <- renderPlot({
     req(analysis_data$qf, input$gene)
-    p <- Boxplot_plotter(analysis_data$qf,input$gene)
+    fn <- analysis_data$plot_functions[["Boxplot_plotter"]]
+    req(is.function(fn))
+    p <- fn(analysis_data$qf,input$gene)
     print(p)
   })
 
   output$volcanoPlotProt <- renderPlotly({
     req(analysis_data$qf, input$gene)
-    p <- Volcano_plotter_highlight(analysis_data$qf, input$gene)
+    fn <- analysis_data$plot_functions[["Volcano_plotter_highlight"]]
+    req(is.function(fn))
+    p <- fn(analysis_data$qf, input$gene)
     ggplotly(p, tooltip = "text")
   })
 
@@ -616,7 +702,9 @@ function(input, output, session) {
 
   output$volcanoPlot <- renderPlot({
     req(analysis_data$qf)
-    p <- Volcano_plotter(analysis_data$qf, Title = "Volcano Plot")
+    fn <- analysis_data$plot_functions[["Volcano_plotter"]]
+    req(is.function(fn))
+    p <- fn(analysis_data$qf, Title = "Volcano Plot")
     print(p)
   })
 
@@ -628,7 +716,9 @@ function(input, output, session) {
     content = function(file) {
       req(analysis_data$qf)
       png(file, width = 443, height = 610)
-      p <- Volcano_plotter(analysis_data$qf, Title = "Volcano Plot")
+      fn <- analysis_data$plot_functions[["Volcano_plotter"]]
+      req(is.function(fn))
+      p <- fn(analysis_data$qf, Title = "Volcano Plot")
       print(p)
       dev.off()
     }
@@ -644,11 +734,13 @@ function(input, output, session) {
 
   default_heatmap <- eventReactive(input$updateHeatmap, {
     req(analysis_data$qf)
-    make_heatmap(analysis_data$qf,
-                 i = "Results",
-                 annot_list = annotation_list(),
-                 only_significant = FALSE,
-                 n = NULL)
+    fn <- analysis_data$plot_functions[["make_heatmap"]]
+    req(is.function(fn))
+    fn(analysis_data$qf,
+       i = "Results",
+       annot_list = annotation_list(),
+       only_significant = FALSE,
+       n = NULL)
   }, ignoreNULL = FALSE)
 
   output$defaultHeatmapPlot <- renderPlot({
@@ -658,11 +750,13 @@ function(input, output, session) {
 
   custom_heatmap <- reactive({
     req(analysis_data$qf, input$n_value)
-    make_heatmap(analysis_data$qf,
-                 i = "Results",
-                 annot_list = annotation_list(),
-                 only_significant = TRUE,
-                 n = input$n_value)
+    fn <- analysis_data$plot_functions[["make_heatmap"]]
+    req(is.function(fn))
+    fn(analysis_data$qf,
+       i = "Results",
+       annot_list = annotation_list(),
+       only_significant = TRUE,
+       n = input$n_value)
   })
 
   output$customHeatmapPlot <- renderPlot({
@@ -710,7 +804,9 @@ function(input, output, session) {
 
   output$pcaPlot <- renderPlot({
     req(analysis_data$qf)
-    p <- PCA_plotter(analysis_data$qf, i = "Proteins", color = "group")
+    fn <- analysis_data$plot_functions[["PCA_plotter"]]
+    req(is.function(fn))
+    p <- fn(analysis_data$qf, i = "Proteins", color = "group")
     print(p)
   })
 
@@ -721,7 +817,9 @@ function(input, output, session) {
     content = function(file) {
       req(analysis_data$qf)
       png(file, width = 530, height = 360)
-      p <- PCA_plotter(analysis_data$qf, i = "Proteins", color = "group", label = "none")
+      fn <- analysis_data$plot_functions[["PCA_plotter"]]
+      req(is.function(fn))
+      p <- fn(analysis_data$qf, i = "Proteins", color = "group", label = "none")
       print(p)
       dev.off()
     }
