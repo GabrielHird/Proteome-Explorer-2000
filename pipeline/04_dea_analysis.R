@@ -212,7 +212,7 @@ if(DEA_method == "msempire" & Run_DEA == TRUE) {
       qval = qvalue,
       logFC = foldchange.log2
     )
-  rm(es, msdap, log_)
+  rm(es, msdap)
   
 }
 
