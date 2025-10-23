@@ -7,10 +7,12 @@
 pipeline_dir <- getOption("pex_pipeline_dir", default = "./Scripts/Proteome Explorer v1.0/ProteomeExplorer Pipeline")
 pipeline_dir <- normalizePath(pipeline_dir, winslash = "/", mustWork = FALSE)
 
+pipeline_env <- environment()
+
 suppressPackageStartupMessages({
 
   # Setup/helper
-  source(file.path(pipeline_dir, "PExp - Functions.R"))
+  sys.source(file.path(pipeline_dir, "PExp - Functions.R"), envir = pipeline_env)
   library(dplyr)
   library(filenamer)
   library(data.table)
@@ -119,24 +121,24 @@ BiocParallel::register(BiocParallel::SnowParam(workers = n_cores), default = TRU
 # Run analysis ------------------------------------------------------------
 
 
-source(file.path(pipeline_dir, "2 - Import.R"))
+sys.source(file.path(pipeline_dir, "2 - Import.R"), envir = pipeline_env)
 
-source(file.path(pipeline_dir, "3 - Data preprocessing.R"))
+sys.source(file.path(pipeline_dir, "3 - Data preprocessing.R"), envir = pipeline_env)
 
 if(subtype == TRUE) {
-  source(file.path(pipeline_dir, "4 - Subtype DEA Analysis.R"))
+  sys.source(file.path(pipeline_dir, "4 - Subtype DEA Analysis.R"), envir = pipeline_env)
 } else {
-  source(file.path(pipeline_dir, "4 - DEA Analysis.R"))
+  sys.source(file.path(pipeline_dir, "4 - DEA Analysis.R"), envir = pipeline_env)
 }
 
-source(file.path(pipeline_dir, "5 - Postprocessing.R"))
+sys.source(file.path(pipeline_dir, "5 - Postprocessing.R"), envir = pipeline_env)
 
-source(file.path(pipeline_dir, "6 - Pathway analysis.R"))
+sys.source(file.path(pipeline_dir, "6 - Pathway analysis.R"), envir = pipeline_env)
 
-source(file.path(pipeline_dir, "7 - Export plots.R"))
+sys.source(file.path(pipeline_dir, "7 - Export plots.R"), envir = pipeline_env)
 
 # Print report
-source(file.path(pipeline_dir, "Final - Print report.R"))
+sys.source(file.path(pipeline_dir, "Final - Print report.R"), envir = pipeline_env)
 
 if(Run_Interactive == TRUE) {
   runApp(file.path(pipeline_dir, "InteractiveViz"))
