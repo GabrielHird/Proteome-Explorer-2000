@@ -187,22 +187,6 @@ if(Run_GSEA == FALSE) {
   }
 }
 
-# PathfinderR -------------------------------------------------------------
-if(run_pathfind == TRUE ) {
-  
-  # Data setup
-  df <- qf[["Results"]] %>%
-    rowData() %>%
-    as.data.frame() %>% 
-    dplyr::select(Gene, logFC, qval) %>% 
-    na.omit() %>% 
-    dplyr::rename(Gene.symbol = Gene,
-                  adj.P.Val = qval) 
-  
-  output_df <- run_pathfindR(df,  p_val_threshold = 0.9, gene_sets = "GO-BP")
-  enrichment_chart(output_df)
-  
-}
 
 rm(gsva_data, GSVA_param, GSVA_res, KEGG_db, KEGG_gs)
 

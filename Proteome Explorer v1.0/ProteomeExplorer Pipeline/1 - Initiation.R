@@ -51,7 +51,6 @@ suppressPackageStartupMessages({
   # Pathway
   library(clusterProfiler)
   library(org.Hs.eg.db)
-  library(pathfindR)
   library(enrichplot)
   library(GSVA)
   library(msigdbr)
