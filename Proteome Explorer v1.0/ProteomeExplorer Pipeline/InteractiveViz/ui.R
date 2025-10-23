@@ -60,14 +60,12 @@ page_navbar(
         title = "Launch Analysis",
         actionButton(
           inputId = "run_pipeline",
-          label = "Run analysis",
-          icon = bs_icon("play-fill"),
+          label = tagList(bs_icon("play-fill"), "Run analysis"),
           class = "btn-primary"
         ),
         actionButton(
           inputId = "reset_defaults",
-          label = "Reset defaults",
-          icon = bs_icon("arrow-counterclockwise"),
+          label = tagList(bs_icon("arrow-counterclockwise"), "Reset defaults"),
           class = "btn-default"
         ),
         hr(),
