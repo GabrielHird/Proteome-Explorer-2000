@@ -29,7 +29,7 @@ norm_cards <- list(
 # UI ----------------------------------------------------------------------
 
 page_navbar(
-  
+
   # Setup
   title = "Proteome Explorer Interactive",
   theme = bs_theme(bootswatch = "spacelab"),
@@ -51,7 +51,186 @@ page_navbar(
     }
   "))
   ),
-  
+
+
+  nav_panel(
+    "Setup",
+    layout_sidebar(
+      sidebar = sidebar(
+        title = "Launch Analysis",
+        actionButton(
+          inputId = "run_pipeline",
+          label = "Run analysis",
+          icon = bs_icon("play-fill"),
+          class = "btn-primary"
+        ),
+        actionButton(
+          inputId = "reset_defaults",
+          label = "Reset defaults",
+          icon = bs_icon("arrow-counterclockwise"),
+          class = "btn-default"
+        ),
+        hr(),
+        uiOutput("pipeline_status"),
+        hr(),
+        verbatimTextOutput("pipeline_log", placeholder = TRUE)
+      ),
+      layout_columns(
+        col_widths = c(12),
+        card(
+          card_header("Project information"),
+          layout_columns(
+            col_widths = c(6, 6),
+            textInput("project_name", "Project name", value = "PExA Lungcancer v6"),
+            textInput("analysis_run", "Analysis run", value = "EBP_v1_detect")
+          ),
+          layout_columns(
+            col_widths = c(6,6),
+            textInput("your_name", "Your name", value = "Gabriel Hirdman"),
+            textInput("lab_name", "Lab name", value = "Lindstedt Lab")
+          ),
+          textInput("contact", "Contact", value = "gabriel.hirdman@med.lu.se")
+        ),
+        card(
+          card_header("Run settings"),
+          layout_columns(
+            col_widths = c(4,4,4),
+            checkboxInput("first_pass", "First pass", value = TRUE),
+            checkboxInput("run_normalizer", "Run normalizer", value = TRUE),
+            checkboxInput("run_dea", "Run DEA", value = TRUE)
+          ),
+          layout_columns(
+            col_widths = c(4,4,4),
+            checkboxInput("run_gsea", "Run GSEA", value = TRUE),
+            checkboxInput("run_pathfind", "Run pathfindR", value = FALSE),
+            checkboxInput("save_plots", "Save plots", value = TRUE)
+          ),
+          layout_columns(
+            col_widths = c(4,4,4),
+            checkboxInput("export_data", "Export data", value = TRUE),
+            checkboxInput("subtype", "Subtype analysis", value = FALSE),
+            checkboxInput("run_interactive", "Launch dashboard after run", value = FALSE)
+          )
+        ),
+        card(
+          card_header("Group setup"),
+          layout_columns(
+            col_widths = c(6,6),
+            textInput("treatment_group", "Treatment group", value = "Cancer"),
+            textInput("reference_group", "Reference group", value = "Normal")
+          )
+        ),
+        card(
+          card_header("Filtering"),
+          layout_columns(
+            col_widths = c(6,6),
+            numericInput("import_qval", "Import q-value", value = 0.01, min = 0, step = 0.001),
+            numericInput("import_pg_qval", "Import protein group q-value", value = 0.01, min = 0, step = 0.001)
+          ),
+          layout_columns(
+            col_widths = c(4,4,4),
+            numericInput("group_treshold", "Group threshold", value = 0.75, min = 0, max = 1, step = 0.05),
+            numericInput("global_treshold", "Global threshold", value = 0.6, min = 0, max = 1, step = 0.05),
+            selectInput("treshold_level", "Threshold level", choices = c("Group", "Global"), selected = "Group")
+          ),
+          checkboxInput("peptide_level", "Peptide level filtering", value = TRUE)
+        ),
+        card(
+          card_header("Normalization"),
+          layout_columns(
+            col_widths = c(6,6),
+            selectInput(
+              "norm_method",
+              "Normalization method",
+              choices = c("CycLoess", "mean", "median", "Quantile", "RLR", "GI", "log2", "VSN"),
+              selected = "CycLoess"
+            ),
+            selectInput(
+              "batch_corr",
+              "Batch correction",
+              choices = c("eigenms", "sva", "comBat", "none"),
+              selected = "eigenms"
+            )
+          )
+        ),
+        card(
+          card_header("Aggregation"),
+          selectInput(
+            "agg_method",
+            "Aggregation method",
+            choices = c("maxlfq", "robustsummary", "medianpolish"),
+            selected = "robustsummary"
+          )
+        ),
+        card(
+          card_header("Imputation"),
+          layout_columns(
+            col_widths = c(4,4,4),
+            checkboxInput("impute", "Enable imputation", value = FALSE),
+            textInput("impute_mar", "MAR method", value = ""),
+            textInput("impute_mnar", "MNAR method", value = "")
+          ),
+          textInput("impute_method", "Combined imputation method", value = "")
+        ),
+        card(
+          card_header("DEA analysis"),
+          layout_columns(
+            col_widths = c(6,6),
+            selectInput("dea_method", "DEA method", choices = c("proDA", "limma", "DEqMS", "msqrob", "msempire"), selected = "msqrob"),
+            selectInput("study_design", "Study design", choices = c("unpaired", "paired"), selected = "unpaired")
+          ),
+          layout_columns(
+            col_widths = c(6,6),
+            numericInput("alpha", "Alpha (FDR)", value = 0.05, min = 0, max = 1, step = 0.01),
+            textInput("logfc_cutoff", "logFC cutoff", value = "")
+          )
+        ),
+        card(
+          card_header("Pathway"),
+          textInput("org_db", "Organism database", value = "org.Hs.eg.db")
+        ),
+        card(
+          card_header("Points of interest"),
+          layout_columns(
+            col_widths = c(6,6),
+            textInput("boxplot_prot", "Boxplot proteins (comma separated)", value = "CSTA"),
+            textInput("agg_prot", "Aggregation proteins (comma separated)", value = "CSTA")
+          )
+        ),
+        card(
+          card_header("Colors"),
+          textAreaInput(
+            "group_colors",
+            "Group colors (one per line: Group = #HEX)",
+            value = "Cancer = #FABC3C\nNormal = #006D77",
+            rows = 3
+          ),
+          textAreaInput(
+            "expression_lvl_color",
+            "Expression level colors (Name = #HEX)",
+            value = "OVER = #CB4335\nUNDER = #2E86C1",
+            rows = 2
+          )
+        ),
+        card(
+          card_header("Heatmap annotations"),
+          textAreaInput(
+            "heatmap_annot",
+            "Annotation mappings (Label = column)",
+            value = "Group = group\nBatch = Extraction_batch\nStudy = Study\nMembrane = PExA_membrane",
+            rows = 4
+          )
+        ),
+        card(
+          card_header("Data paths"),
+          textInput("dia_path", "DIA-NN report path", value = "./Data/DIA-NN output/diann_report_EBP.tsv"),
+          textInput("fasta_path", "FASTA path", value = "./Data/FASTA file/EBP.fasta"),
+          textInput("sample_path", "Sample metadata path", value = "./Data/Sample Metadata/EBP_sample_data.xlsx")
+        )
+      )
+    )
+  ),
+
 
 # Identifications ---------------------------------------------------------
 
@@ -60,18 +239,8 @@ page_navbar(
     layout_sidebar(
       sidebar = sidebar(
         title = "Identifications Controls",
-        varSelectInput(
-          inputId = "bar_color",
-          label = "Color by:",
-          data = as.data.frame(colData(qf)),
-          selected = as.name("shortname")
-        ),
-        varSelectInput(
-          inputId = "bar_sort",
-          label = "Sort by (low to high):",
-          data = as.data.frame(colData(qf)),
-          selected = as.name("Nr_prot")
-        ),
+        uiOutput("bar_color_input"),
+        uiOutput("bar_sort_input"),
         actionButton("updateBar", "Update Plot")
       ),
       card(
@@ -111,7 +280,7 @@ page_navbar(
       col_widths = c(2, 10),
       value_box(
         title = "Normalization method:",
-        value = Norm_method,
+        value = textOutput("norm_method_display"),
         showcase = bs_icon("clipboard-check-fill"),
         showcase_layout = c("left center"),
         theme = "primary",
@@ -139,12 +308,7 @@ page_navbar(
     layout_sidebar(
       sidebar = sidebar(
         title = "Select protein",
-        selectInput(
-          inputId = "gene",
-          label = "Select gene:",
-          choices = as.character(as.data.frame(rowData(qf[["Results"]]))[["Gene"]]),
-          selected = "ALB"
-        ),
+        uiOutput("gene_selector"),
         actionButton("updateAgg", "Update Plot")
       ),
       layout_columns(
@@ -203,12 +367,7 @@ page_navbar(
     layout_sidebar(
       sidebar = sidebar(
         title = "Heatmap Annotation Controls",
-        checkboxGroupInput(
-          inputId = "selected_annotations",
-          label = "Select annotation columns:",
-          choices = names(as.data.frame(colData(qf))),
-          selected = c("group", "Extraction_batch")
-        ),
+        uiOutput("heatmap_annotations"),
         actionButton("updateHeatmap", "Update Heatmap")
       ),
       card(

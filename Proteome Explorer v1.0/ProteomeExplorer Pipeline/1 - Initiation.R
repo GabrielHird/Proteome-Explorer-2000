@@ -4,10 +4,13 @@
 
 # Import packages ---------------------------------------------------------
 
+pipeline_dir <- getOption("pex_pipeline_dir", default = "./Scripts/Proteome Explorer v1.0/ProteomeExplorer Pipeline")
+pipeline_dir <- normalizePath(pipeline_dir, winslash = "/", mustWork = FALSE)
+
 suppressPackageStartupMessages({
-  
+
   # Setup/helper
-  source("./Scripts/Proteome Explorer v1.0/ProteomeExplorer Pipeline/PExp - Functions.R")
+  source(file.path(pipeline_dir, "PExp - Functions.R"))
   library(dplyr)
   library(filenamer)
   library(data.table)
@@ -116,27 +119,27 @@ BiocParallel::register(BiocParallel::SnowParam(workers = n_cores), default = TRU
 # Run analysis ------------------------------------------------------------
 
 
-source("./Scripts/Proteome Explorer v1.0/ProteomeExplorer Pipeline/2 - Import.R")
+source(file.path(pipeline_dir, "2 - Import.R"))
 
-source("./Scripts/Proteome Explorer v1.0/ProteomeExplorer Pipeline/3 - Data preprocessing.R")
+source(file.path(pipeline_dir, "3 - Data preprocessing.R"))
 
 if(subtype == TRUE) {
-  source("./Scripts/Proteome Explorer v1.0/ProteomeExplorer Pipeline/4 - Subtype DEA Analysis.R")
+  source(file.path(pipeline_dir, "4 - Subtype DEA Analysis.R"))
 } else {
-  source("./Scripts/Proteome Explorer v1.0/ProteomeExplorer Pipeline/4 - DEA Analysis.R")
+  source(file.path(pipeline_dir, "4 - DEA Analysis.R"))
 }
 
-source("./Scripts/Proteome Explorer v1.0/ProteomeExplorer Pipeline/5 - Postprocessing.R")
+source(file.path(pipeline_dir, "5 - Postprocessing.R"))
 
-source("./Scripts/Proteome Explorer v1.0/ProteomeExplorer Pipeline/6 - Pathway analysis.R")
+source(file.path(pipeline_dir, "6 - Pathway analysis.R"))
 
-source("./Scripts/Proteome Explorer v1.0/ProteomeExplorer Pipeline/7 - Export plots.R")
+source(file.path(pipeline_dir, "7 - Export plots.R"))
 
 # Print report
-source("./Scripts/Proteome Explorer v1.0/ProteomeExplorer Pipeline/Final - Print report.R")
+source(file.path(pipeline_dir, "Final - Print report.R"))
 
 if(Run_Interactive == TRUE) {
-  runApp("./Scripts/Proteome Explorer v1.0/ProteomeExplorer Pipeline/InteractiveViz")
+  runApp(file.path(pipeline_dir, "InteractiveViz"))
 }
 
 
