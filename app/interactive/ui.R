@@ -243,191 +243,211 @@ page_navbar(
     )
   ),
 
+
+# Identifications ---------------------------------------------------------
+
   nav_panel(
-    "View Analysis Results",
-    navset_tab(
-      nav_panel(
-        "Identifications",
-        layout_sidebar(
-          sidebar = sidebar(
-            title = "Identifications Controls",
-            uiOutput("bar_color_input"),
-            uiOutput("bar_sort_input"),
-            actionButton("updateBar", "Update Plot")
-          ),
-          card(
-            full_screen = TRUE,
-            card_header("Identifications Barplot"),
-            div(
-              style = "display: inline-block; margin-bottom: 10px;",
-              downloadButton("download_barplot", "Download Plot (.png)", class = "btn btn-default", style = "width: auto;")
-            ),
-            plotOutput("barplot")
-          )
-        )
+    "Identifications",
+    layout_sidebar(
+      sidebar = sidebar(
+        title = "Identifications Controls",
+        uiOutput("bar_color_input"),
+        uiOutput("bar_sort_input"),
+        actionButton("updateBar", "Update Plot")
       ),
+      card(
+        full_screen = TRUE,
+        card_header("Identifications Barplot"),
+        div(style = "display: inline-block; margin-bottom: 10px;",
+            downloadButton("download_barplot", "Download Plot (.png)", class = "btn btn-default", style = "width: auto;")
+        ),
+        plotOutput("barplot")
+      )
+    )
+  ),
+  
 
-      nav_panel(
-        "Missing Values",
-        card(
-          full_screen = TRUE,
-          card_header("Missing Values Map"),
-          div(
-            style = "display: inline-block; margin-bottom: 10px;",
-            downloadButton("download_missMap", "Download Plot (.png)", class = "btn btn-default", style = "width: auto;")
-          ),
-          plotOutput("missMap")
-        )
+# Missing values ----------------------------------------------------------
+
+  nav_panel(
+    "Missing Values",
+    card(
+      full_screen = TRUE,
+      card_header("Missing Values Map"),
+      div(style = "display: inline-block; margin-bottom: 10px;",
+          downloadButton("download_missMap", "Download Plot (.png)", class = "btn btn-default", style = "width: auto;")
       ),
+      plotOutput("missMap")
+    )
+  ),
+  
 
-      nav_panel(
-        "Normalisation",
+
+# Normalization ----------------------------------------------------------
+
+  nav_panel(
+    "Normalisation",
+    layout_columns(
+      fill = FALSE,
+      col_widths = c(2, 10),
+      value_box(
+        title = "Normalization method:",
+        value = textOutput("norm_method_display"),
+        showcase = bs_icon("clipboard-check-fill"),
+        showcase_layout = c("left center"),
+        theme = "primary",
+        max_height = "200px"
+      ),
+      tagList(
         layout_columns(
-          fill = FALSE,
-          col_widths = c(2, 10),
-          value_box(
-            title = "Normalization method:",
-            value = textOutput("norm_method_display"),
-            showcase = bs_icon("clipboard-check-fill"),
-            showcase_layout = c("left center"),
-            theme = "primary",
-            max_height = "200px"
-          ),
-          tagList(
-            layout_columns(
-              col_widths = c(6,6),
-              norm_cards[[1]],
-              norm_cards[[2]]
-            ),
-            layout_columns(
-              col_widths = c(6,6),
-              norm_cards[[3]],
-              norm_cards[[4]]
-            )
-          )
+          col_widths = c(6,6),
+          norm_cards[[1]],
+          norm_cards[[2]]
+        ),
+        layout_columns(
+          col_widths = c(6,6),
+          norm_cards[[3]],
+          norm_cards[[4]]
         )
-      ),
+      )
+    )
+  ),
+      
+# Protein -----------------------------------------------------------------
 
-      nav_panel(
-        "Protein",
-        layout_sidebar(
-          sidebar = sidebar(
-            title = "Select protein",
-            uiOutput("gene_selector"),
-            actionButton("updateAgg", "Update Plot")
-          ),
+  nav_panel(
+    "Protein",
+    layout_sidebar(
+      sidebar = sidebar(
+        title = "Select protein",
+        uiOutput("gene_selector"),
+        actionButton("updateAgg", "Update Plot")
+      ),
+      layout_columns(
+        col_widths = c(6,6),
+        
+        # Left column
+        layout_columns(
+          col_widths = c(12,12),
+          row_heights = c(1,1),
+          
+          # First row: boxplot and table side-by-side
           layout_columns(
             col_widths = c(6,6),
-            layout_columns(
-              col_widths = c(12,12),
-              row_heights = c(1,1),
-              layout_columns(
-                col_widths = c(6,6),
-                card(
-                  full_screen = TRUE,
-                  card_header("Boxplot"),
-                  plotOutput("prot_boxplot")
-                ),
-                card(
-                  full_screen = TRUE,
-                  card_header("Protein Details"),
-                  uiOutput("protein_info")
-                )
-              ),
-              card(
-                full_screen = TRUE,
-                card_header("Protein Aggregation Plot"),
-                plotOutput("aggregationPlot")
-              )
+            card(
+              full_screen = TRUE,
+              card_header("Boxplot"),
+              plotOutput("prot_boxplot")
             ),
             card(
               full_screen = TRUE,
-              card_header("Volcano Plot"),
-              plotlyOutput("volcanoPlotProt")
+              card_header("Protein Details"),
+              uiOutput("protein_info")
             )
-          )
-        )
-      ),
-
-      nav_panel(
-        "Statistics Table",
-        DTOutput("results_table")
-      ),
-
-      nav_panel(
-        "Heatmap",
-        layout_sidebar(
-          sidebar = sidebar(
-            title = "Heatmap Annotation Controls",
-            uiOutput("heatmap_annotations"),
-            actionButton("updateHeatmap", "Update Heatmap")
           ),
+          
+          # Second row: Protein Aggregation Plot
           card(
             full_screen = TRUE,
-            card_header(
-              "Heatmap",
-              tabsetPanel(
-                id = "plot_tab",
-                type = "pills",
-                selected = "custom",
-                tabPanel("All Identifications", value = "default"),
-                tabPanel("Significant", value = "custom")
-              )
-            ),
-            card_body(
-              conditionalPanel(
-                condition = "input.plot_tab == 'default'",
-                div(
-                  style = "float: right; margin-bottom: 10px;",
-                  downloadButton("download_heatmap_full", "Download Plot (.png)", class = "btn btn-default", style = "width: auto;")
-                ),
-                plotOutput("defaultHeatmapPlot", height = "1000px")
-              ),
-              conditionalPanel(
-                condition = "input.plot_tab == 'custom'",
-                sliderInput(
-                  inputId = "n_value",
-                  label = "Set number for n",
-                  min = 1,
-                  max = 100,
-                  value = 50
-                ),
-                div(
-                  style = "float: right; margin-bottom: 10px;",
-                  downloadButton("download_heatmap_sig", "Download Plot (.png)", class = "btn btn-default", style = "width: auto;")
-                ),
-                plotOutput("customHeatmapPlot", height = "1000px")
-              )
-            )
+            card_header("Protein Aggregation Plot"),
+            plotOutput("aggregationPlot")
           )
-        )
-      ),
-
-      nav_panel(
-        "Volcano",
+        ),
+        
+        # Right column remains the Volcano Plot
         card(
           full_screen = TRUE,
           card_header("Volcano Plot"),
-          div(
-            style = "display: inline-block; margin-bottom: 10px;",
-            downloadButton("download_volcano", "Download Plot (.png)", class = "btn btn-default", style = "width: auto;")
-          ),
-          plotOutput("volcanoPlot")
-        )
-      ),
-
-      nav_panel(
-        "PCA",
-        card(
-          full_screen = TRUE,
-          card_header("PCA Plot"),
-          div(
-            style = "display: inline-block; margin-bottom: 10px;",
-            downloadButton("download_pca", "Download Plot (.png)", class = "btn btn-default", style = "width: auto;")
-          ),
-          plotOutput("pcaPlot")
+          plotlyOutput("volcanoPlotProt")
         )
       )
+    )
+  ),
+
+
+# Stats table -------------------------------------------------------------
+
+  nav_panel(
+    "Statistics Table",
+    DTOutput("results_table")
+  ),
+  
+# Heatmap -----------------------------------------------------------
+
+  nav_panel(
+    "Heatmap",
+    layout_sidebar(
+      sidebar = sidebar(
+        title = "Heatmap Annotation Controls",
+        uiOutput("heatmap_annotations"),
+        actionButton("updateHeatmap", "Update Heatmap")
+      ),
+      card(
+        full_screen = TRUE,
+        card_header(
+          "Heatmap",
+          tabsetPanel(
+            id = "plot_tab",    # used to track which tab is active
+            type = "pills",     # gives you the pill-style tabs
+            selected = "custom",  # make "custom" the default active tab
+            tabPanel("All Identifications", value = "default"),
+            tabPanel("Significant", value = "custom")
+          )
+        ),
+        card_body(
+          conditionalPanel(
+            condition = "input.plot_tab == 'default'",
+            div(style = "float: right; margin-bottom: 10px;",
+                downloadButton("download_heatmap_full", "Download Plot (.png)", class = "btn btn-default", style = "width: auto;")
+            ),
+            plotOutput("defaultHeatmapPlot", height = "1000px")
+          ),
+          conditionalPanel(
+            condition = "input.plot_tab == 'custom'",
+            # Use sliderInput with a reactive max in the server (if needed)
+            sliderInput(
+              inputId = "n_value", 
+              label = "Set number for n", 
+              min = 1, 
+              max = 100,    # placeholder max; update it reactively in the server if necessary
+              value = 50
+            ),
+            div(style = "float: right; margin-bottom: 10px;",
+                downloadButton("download_heatmap_sig", "Download Plot (.png)", class = "btn btn-default", style = "width: auto;")
+            ),
+            plotOutput("customHeatmapPlot", height = "1000px"))
+          )
+        )
+      )
+    ),
+
+
+# Stats results -----------------------------------------------------------
+
+  nav_panel(
+    "Volcano",
+    card(
+      full_screen = TRUE,
+      card_header("Volcano Plot"),
+      div(style = "display: inline-block; margin-bottom: 10px;",
+          downloadButton("download_volcano", "Download Plot (.png)", class = "btn btn-default", style = "width: auto;")
+      ),
+      plotOutput("volcanoPlot")
+    )
+  ),
+  
+
+# PCA ---------------------------------------------------------------------
+
+  nav_panel(
+    "PCA",
+    card(
+      full_screen = TRUE,
+      card_header("PCA Plot"),
+      div(style = "display: inline-block; margin-bottom: 10px;",
+          downloadButton("download_pca", "Download Plot (.png)", class = "btn btn-default", style = "width: auto;")
+      ),
+      plotOutput("pcaPlot")
     )
   )
 )
