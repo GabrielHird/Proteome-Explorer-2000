@@ -15,7 +15,7 @@ function(input, output, session) {
 
   pipeline_dir <- get0("pipeline_dir", ifnotfound = NULL, inherits = TRUE)
   if (is.null(pipeline_dir) || !dir.exists(pipeline_dir)) {
-    pipeline_dir <- normalizePath(file.path(repo_root, "Proteome Explorer v1.0", "ProteomeExplorer Pipeline"), winslash = "/", mustWork = TRUE)
+    pipeline_dir <- normalizePath(file.path(repo_root, "pipeline"), winslash = "/", mustWork = TRUE)
   } else {
     pipeline_dir <- normalizePath(pipeline_dir, winslash = "/", mustWork = TRUE)
   }
@@ -113,6 +113,27 @@ function(input, output, session) {
 
   `%||%` <- function(x, y) {
     if (is.null(x)) y else x
+  }
+
+  build_status_badge <- function(text, variant) {
+    badge_fn <- NULL
+    if (exists("bs_badge", mode = "function")) {
+      badge_fn <- get("bs_badge", mode = "function")
+    } else if (exists("bs_badge", envir = asNamespace("bslib"), inherits = FALSE)) {
+      badge_fn <- get("bs_badge", envir = asNamespace("bslib"))
+    }
+
+    classes <- paste0("bg-", variant)
+
+    if (!is.null(badge_fn)) {
+      args <- list(text, class = classes)
+      if ("bs_theme" %in% names(formals(badge_fn))) {
+        args$bs_theme <- bslib::bs_theme()
+      }
+      return(do.call(badge_fn, args))
+    }
+
+    htmltools::span(text, class = paste("badge", classes))
   }
 
   is_absolute_path <- function(path) {
@@ -265,22 +286,57 @@ function(input, output, session) {
     updateTextInput(session, "contact", value = default_config$Contact)
   })
 
+  observe({
+    if (!analysis_data$running) {
+      analysis_data$logs <- character()
+      analysis_data$status <- "Awaiting analysis"
+    }
+  })
+
+  output$pipeline_status <- renderUI({
+    status <- analysis_data$status
+    badge_status <- dplyr::case_when(
+      status == "Awaiting analysis" ~ "secondary",
+      status == "Running analysis..." ~ "primary",
+      status == "Analysis completed" ~ "success",
+      status == "Pipeline failed" ~ "danger",
+      status == "Pipeline finished without returning results" ~ "warning",
+      status == "File validation failed" ~ "danger",
+      status == "Pipeline finished but no results were produced." ~ "warning",
+      TRUE ~ "secondary"
+    )
+    tagList(
+      strong("Status:"),
+      build_status_badge(status, badge_status)
+    )
+  })
+
+  output$pipeline_log <- renderText({
+    if (!length(analysis_data$logs)) {
+      "Pipeline logs will appear here."
+    } else {
+      paste(analysis_data$logs, collapse = "\n")
+    }
+  })
+
   observeEvent(input$run_pipeline, {
+
     if (analysis_data$running) {
+      showNotification("Pipeline is already running.", type = "message")
       return()
     }
 
     config <- list(
       Project_name = input$project_name,
       Analysis_run = input$analysis_run,
-      First_pass = isTRUE(input$first_pass),
-      Run_normalizer = isTRUE(input$run_normalizer),
-      Run_DEA = isTRUE(input$run_dea),
-      Run_GSEA = isTRUE(input$run_gsea),
-      save_plots = isTRUE(input$save_plots),
-      export_data = isTRUE(input$export_data),
-      subtype = isTRUE(input$subtype),
-      Run_Interactive = FALSE,
+      First_pass = input$first_pass,
+      Run_normalizer = input$run_normalizer,
+      Run_DEA = input$run_dea,
+      Run_GSEA = input$run_gsea,
+      save_plots = input$save_plots,
+      export_data = input$export_data,
+      subtype = input$subtype,
+      Run_Interactive = input$run_interactive,
       Treatment_group = input$treatment_group,
       Reference_group = input$reference_group,
       Import_qval = input$import_qval,
@@ -288,11 +344,11 @@ function(input, output, session) {
       Group_treshold = input$group_treshold,
       Global_treshold = input$global_treshold,
       Treshold_level = input$treshold_level,
-      peptide_level = isTRUE(input$peptide_level),
+      peptide_level = input$peptide_level,
       Norm_method = input$norm_method,
       Batch_corr = input$batch_corr,
       Agg_method = input$agg_method,
-      Impute = isTRUE(input$impute),
+      Impute = input$impute,
       impute_MAR = empty_to_na(input$impute_mar),
       impute_MNAR = empty_to_na(input$impute_mnar),
       impute_method = empty_to_na(input$impute_method),
@@ -363,7 +419,7 @@ function(input, output, session) {
       result <- tryCatch({
         captured_output <- capture.output({
           withCallingHandlers({
-            sys.source(file.path(pipeline_dir, "1 - Initiation.R"), envir = pipeline_env)
+            sys.source(file.path(pipeline_dir, "01_initiation.R"), envir = pipeline_env)
           },
           message = function(m) {
             append_log(m$message)
@@ -422,407 +478,158 @@ function(input, output, session) {
     })
 
     analysis_data$running <- FALSE
-  })
 
-  output$pipeline_status <- renderUI({
-    status_text <- analysis_data$status
-    status_class <- if (grepl("error|fail", tolower(status_text))) {
-      "text-danger"
-    } else if (grepl("complete", tolower(status_text))) {
-      "text-success"
-    } else {
-      "text-muted"
-    }
-    div(class = status_class, strong(status_text))
-  })
-
-  output$pipeline_log <- renderText({
-    if (length(analysis_data$logs) == 0) {
-      "Logs will appear here when the pipeline runs."
-    } else {
-      paste(analysis_data$logs, collapse = "\n")
+    if (analysis_data$status == "Analysis completed" && isTRUE(config$Run_Interactive)) {
+      append_log("Launching interactive dashboard...")
+      shiny::runApp(file.path(repo_root, "app"))
     }
   })
 
-  output$norm_method_display <- renderText({
-    analysis_data$Norm_method %||% "Not available"
+  observeEvent(analysis_data$plot_functions, {
+    if (!length(analysis_data$plot_functions)) {
+      return()
+    }
+
+    output$norm_plots <- renderUI({
+      if (!length(analysis_data$plot_functions)) {
+        return(helpText("Run the pipeline to see normalisation diagnostics."))
+      }
+      norm_fns <- c("Density_plotter", "Norm_boxplotter")
+      missing <- setdiff(norm_fns, names(analysis_data$plot_functions))
+      if (length(missing)) {
+        return(helpText(paste("Missing plotting functions:", paste(missing, collapse = ", "))))
+      }
+
+      tagList(norm_cards)
+    })
+
+    output$agg_plot <- renderPlot({
+      fn <- analysis_data$plot_functions$Aggregation_plotter
+      if (is.null(fn)) {
+        return(NULL)
+      }
+      fn()
+    })
+
+    output$volcano_plot <- renderPlot({
+      fn <- analysis_data$plot_functions$Volcano_plotter
+      if (is.null(fn)) {
+        return(NULL)
+      }
+      fn()
+    })
+
+    output$volcano_plot_highlight <- renderPlot({
+      fn <- analysis_data$plot_functions$Volcano_plotter_highlight
+      if (is.null(fn)) {
+        return(NULL)
+      }
+      fn()
+    })
+
+    output$heatmap <- renderPlot({
+      fn <- analysis_data$plot_functions$make_heatmap
+      if (is.null(fn)) {
+        return(NULL)
+      }
+      fn()
+    })
+
+    output$pca_plot <- renderPlot({
+      fn <- analysis_data$plot_functions$PCA_plotter
+      if (is.null(fn)) {
+        return(NULL)
+      }
+      fn()
+    })
+
+    output$pre_norm_dens <- renderPlotly({
+      fn <- analysis_data$plot_functions$Density_plotter
+      if (is.null(fn)) {
+        return(NULL)
+      }
+      fn(type = "raw")
+    })
+
+    output$post_norm_dens <- renderPlotly({
+      fn <- analysis_data$plot_functions$Density_plotter
+      if (is.null(fn)) {
+        return(NULL)
+      }
+      fn(type = "normalized")
+    })
+
+    output$pre_norm_box <- renderPlot({
+      fn <- analysis_data$plot_functions$Norm_boxplotter
+      if (is.null(fn)) {
+        return(NULL)
+      }
+      fn(type = "raw")
+    })
+
+    output$post_norm_box <- renderPlot({
+      fn <- analysis_data$plot_functions$Norm_boxplotter
+      if (is.null(fn)) {
+        return(NULL)
+      }
+      fn(type = "normalized")
+    })
+
+    output$boxplot_plot <- renderPlot({
+      fn <- analysis_data$plot_functions$Boxplot_plotter
+      if (is.null(fn)) {
+        return(NULL)
+      }
+      fn()
+    })
+
+    output$barplot_ids <- renderPlot({
+      fn <- analysis_data$plot_functions$Barplot_IDs
+      if (is.null(fn)) {
+        return(NULL)
+      }
+      fn()
+    })
+
+    output$missingness_heatmap <- renderPlot({
+      fn <- analysis_data$plot_functions$miss_map
+      if (is.null(fn)) {
+        return(NULL)
+      }
+      fn()
+    })
   })
 
-  output$bar_color_input <- renderUI({
-    req(analysis_data$qf)
-    df <- as.data.frame(colData(analysis_data$qf))
-    selected <- if ("shortname" %in% names(df)) "shortname" else names(df)[1]
-    varSelectInput(
-      inputId = "bar_color",
-      label = "Color by:",
-      data = df,
-      selected = selected
+  output$analysis_summary <- renderDT({
+    if (is.null(analysis_data$qf)) {
+      return(NULL)
+    }
+    qf <- analysis_data$qf
+
+    norm_method <- analysis_data$Norm_method
+
+    stats <- data.frame(
+      Metric = c(
+        "Number of assays",
+        "Number of features",
+        "Number of proteins",
+        "Normalization method"
+      ),
+      Value = c(
+        length(BiocParallel::bpparam("SerialParam")),
+        nrow(qf),
+        length(unique(qf$protein_group)),
+        norm_method
+      ),
+      stringsAsFactors = FALSE
     )
-  })
-
-  output$bar_sort_input <- renderUI({
-    req(analysis_data$qf)
-    df <- as.data.frame(colData(analysis_data$qf))
-    selected <- if ("Nr_prot" %in% names(df)) "Nr_prot" else names(df)[1]
-    varSelectInput(
-      inputId = "bar_sort",
-      label = "Sort by (low to high):",
-      data = df,
-      selected = selected
-    )
-  })
-
-  output$gene_selector <- renderUI({
-    req(analysis_data$qf)
-    req(!is.null(analysis_data$qf[["Results"]]))
-    genes <- as.character(as.data.frame(rowData(analysis_data$qf[["Results"]]))[["Gene"]])
-    genes <- genes[nzchar(genes)]
-    selectInput(
-      inputId = "gene",
-      label = "Select gene:",
-      choices = sort(unique(genes)),
-      selected = if (length(genes)) genes[1] else NULL
-    )
-  })
-
-  output$heatmap_annotations <- renderUI({
-    req(analysis_data$qf)
-    df <- as.data.frame(colData(analysis_data$qf))
-    choices <- names(df)
-    selected <- intersect(c("group", "Extraction_batch"), choices)
-    if (length(selected) == 0) {
-      selected <- head(choices, 2)
-    }
-    checkboxGroupInput(
-      inputId = "selected_annotations",
-      label = "Select annotation columns:",
-      choices = choices,
-      selected = selected
-    )
-  })
-
-
-# Identifications ---------------------------------------------------------
-
-  output$barplot <- renderPlot({
-    req(analysis_data$qf, input$bar_color, input$bar_sort)
-    fn <- analysis_data$plot_functions[["Barplot_IDs"]]
-    req(is.function(fn))
-    p <- fn(analysis_data$qf, i = "Proteins", color = input$bar_color, sort = input$bar_sort)
-    print(p)
-  })
-
-  output$download_barplot <- downloadHandler(
-    filename = function() {
-      req(analysis_data$results_folder)
-      paste0(analysis_data$results_folder, "barplot_", Sys.Date(), ".png")
-    },
-    content = function(file) {
-      req(analysis_data$qf)
-      png(file, width = 920, height = 550)
-      fn <- analysis_data$plot_functions[["Barplot_IDs"]]
-      req(is.function(fn))
-      p <- fn(analysis_data$qf, i = "Proteins", color = input$bar_color, sort = input$bar_sort)
-      print(p)
-      dev.off()
-    }
-  )
-
-# Missing values ----------------------------------------------------------
-
-  output$missMap <- renderPlot({
-    req(analysis_data$qf)
-    fn <- analysis_data$plot_functions[["miss_map"]]
-    req(is.function(fn))
-    p <- fn(analysis_data$qf, i = "Proteins")
-    print(p)
-  })
-
-  output$download_missMap <- downloadHandler(
-    filename = function() {
-      req(analysis_data$results_folder)
-      paste0(analysis_data$results_folder, "missing_values_", Sys.Date(), ".png")
-    },
-    content = function(file) {
-      req(analysis_data$qf)
-      fn <- analysis_data$plot_functions[["miss_map"]]
-      req(is.function(fn))
-      png(file, width = 920, height = 550)
-      print(fn(analysis_data$qf, i = "Proteins"))
-      dev.off()
-    }
-  )
-
-
-# Normalization ----------------------------------------------------------
-
-  output$pre_norm_dens <- renderPlotly({
-    req(analysis_data$qf)
-    fn <- analysis_data$plot_functions[["Density_plotter"]]
-    req(is.function(fn))
-    p <- fn(analysis_data$qf, i = "Peptides")
-    print(p)
-  })
-
-  output$post_norm_dens <- renderPlotly({
-    req(analysis_data$qf)
-    fn <- analysis_data$plot_functions[["Density_plotter"]]
-    req(is.function(fn))
-    p <- fn(analysis_data$qf, i = "PeptidesProccessed")
-    print(p)
-  })
-
-  output$pre_norm_box <- renderPlot({
-    req(analysis_data$qf)
-    fn <- analysis_data$plot_functions[["Norm_boxplotter"]]
-    req(is.function(fn))
-    p <- fn(analysis_data$qf, i = "Peptides")
-    print(p)
-  })
-
-  output$post_norm_box <- renderPlot({
-    req(analysis_data$qf)
-    fn <- analysis_data$plot_functions[["Norm_boxplotter"]]
-    req(is.function(fn))
-    p <- fn(analysis_data$qf, i = "PeptidesProccessed")
-    print(p)
-  })
-
-
-# Protein -----------------------------------------------------------------
-
-  output$aggregationPlot <- renderPlot({
-    req(analysis_data$qf, input$gene)
-    fn <- analysis_data$plot_functions[["Aggregation_plotter"]]
-    req(is.function(fn))
-    p <- fn(analysis_data$qf, input$gene)
-    print(p)
-  })
-
-  output$prot_boxplot <- renderPlot({
-    req(analysis_data$qf, input$gene)
-    fn <- analysis_data$plot_functions[["Boxplot_plotter"]]
-    req(is.function(fn))
-    p <- fn(analysis_data$qf,input$gene)
-    print(p)
-  })
-
-  output$volcanoPlotProt <- renderPlotly({
-    req(analysis_data$qf, input$gene)
-    fn <- analysis_data$plot_functions[["Volcano_plotter_highlight"]]
-    req(is.function(fn))
-    p <- fn(analysis_data$qf, input$gene)
-    ggplotly(p, tooltip = "text")
-  })
-
-  output$protein_info <- renderUI({
-    req(analysis_data$qf, input$gene)
-    req(!is.null(analysis_data$qf[["Results"]]))
-
-    protein_data <- as.data.frame(rowData(analysis_data$qf[["Results"]]))
-    selected_gene <- input$gene
-    protein_row <- protein_data[protein_data$Gene == selected_gene, ]
-
-    if (nrow(protein_row) == 0) {
-      return(HTML("<p>No protein information available.</p>"))
-    }
-
-    ids <- protein_row$Protein.Group
-    query <- list("accession_id" = ids)
-    function_df <- query_uniprot(query,
-                                 columns = c("accession", "cc_function"),
-                                 show_progress = FALSE)
-
-    function_text <- if (nrow(function_df) > 0) {
-      function_df[["Function [CC]"]][1]
-    } else {
-      "Not available"
-    }
-
-    info_table <- paste0(
-      "<table style='border-collapse: collapse; width: 100%;'>",
-      "<tr><td><b>Protein:</b></td><td>", protein_row$Gene, "</td></tr>",
-      "<tr><td><b>Full name:</b></td><td>", protein_row$First.Protein.Description, "</td></tr>",
-      "<tr><td><b>Uniprot ID(s):</b></td><td>", protein_row$Protein.Group, "</td></tr>",
-      "<tr><td><b>EntrezID:</b></td><td>", protein_row$ENTREZID, "</td></tr>",
-      "<tr><td><b>Number of peptides:</b></td><td>", protein_row$Number.Peptides, "</td></tr>",
-      "<tr><td><b>Significant:</b></td><td>",
-      "<div style='display:inline-block; padding:4px 8px; border-radius:5px; border: 2px solid ",
-      ifelse(tolower(as.character(protein_row$signif)) == "true", "green", "red"),
-      "; color:",
-      ifelse(tolower(as.character(protein_row$signif)) == "true", "green", "red"),
-      ";'>",
-      protein_row$signif,
-      "</div>",
-      "</td></tr>",
-      "<tr><td><b>LogFC:</b></td><td>", protein_row$logFC, "</td></tr>",
-      "<tr><td><b>Q-value:</b></td><td>", protein_row$qval, "</td></tr>",
-      "<tr><td><b>Function:</b></td><td>", function_text, "</td></tr>",
-      "</table>"
-    )
-
-    HTML(info_table)
-  })
-
-
-# Stats table -------------------------------------------------------------
-
-  results_table_data <- reactive({
-    req(analysis_data$qf)
-    req(!is.null(analysis_data$qf[["Results"]]))
-    as.data.frame(rowData(analysis_data$qf[["Results"]]))
-  })
-
-  output$results_table <- renderDT({
-    df <- results_table_data()
-    numeric_cols <- names(df)[sapply(df, is.numeric)]
-    numeric_cols <- numeric_cols[numeric_cols != "Number.Peptides"]
 
     datatable(
-      df,
+      stats,
+      options = list(pageLength = 5, dom = "tip"),
       rownames = FALSE,
-      class = 'display compact cell-border stripe',
-      extensions = c("Scroller", "FixedHeader"),
-      options = list(
-        deferRender = TRUE,
-        scrollY = 900,
-        scrollX = TRUE,
-        scrollCollapse = TRUE,
-        scroller = TRUE,
-        autoWidth = FALSE,
-        columnDefs = list(
-          list(width = '150px', targets = "_all")
-        )
-      )
-    ) %>% formatRound(columns = numeric_cols, digits = 4)
-  })
-
-
-# Stats results -----------------------------------------------------------
-
-  output$volcanoPlot <- renderPlot({
-    req(analysis_data$qf)
-    fn <- analysis_data$plot_functions[["Volcano_plotter"]]
-    req(is.function(fn))
-    p <- fn(analysis_data$qf, Title = "Volcano Plot")
-    print(p)
-  })
-
-  output$download_volcano <- downloadHandler(
-    filename = function() {
-      req(analysis_data$results_folder)
-      paste0(analysis_data$results_folder, "volcano_", Sys.Date(), ".png")
-    },
-    content = function(file) {
-      req(analysis_data$qf)
-      png(file, width = 443, height = 610)
-      fn <- analysis_data$plot_functions[["Volcano_plotter"]]
-      req(is.function(fn))
-      p <- fn(analysis_data$qf, Title = "Volcano Plot")
-      print(p)
-      dev.off()
-    }
-  )
-
-
-# Heatmap -----------------------------------------------------------------
-
-  annotation_list <- reactive({
-    req(input$selected_annotations)
-    setNames(as.list(input$selected_annotations), input$selected_annotations)
-  })
-
-  default_heatmap <- eventReactive(input$updateHeatmap, {
-    req(analysis_data$qf)
-    fn <- analysis_data$plot_functions[["make_heatmap"]]
-    req(is.function(fn))
-    fn(analysis_data$qf,
-       i = "Results",
-       annot_list = annotation_list(),
-       only_significant = FALSE,
-       n = NULL)
-  }, ignoreNULL = FALSE)
-
-  output$defaultHeatmapPlot <- renderPlot({
-    req(default_heatmap())
-    default_heatmap()
-  })
-
-  custom_heatmap <- reactive({
-    req(analysis_data$qf, input$n_value)
-    fn <- analysis_data$plot_functions[["make_heatmap"]]
-    req(is.function(fn))
-    fn(analysis_data$qf,
-       i = "Results",
-       annot_list = annotation_list(),
-       only_significant = TRUE,
-       n = input$n_value)
-  })
-
-  output$customHeatmapPlot <- renderPlot({
-    req(custom_heatmap())
-    custom_heatmap()
-  })
-
-  observe({
-    req(analysis_data$qf)
-    req(!is.null(analysis_data$qf[["Results"]]))
-    slider_max <- nrow(rowData(analysis_data$qf[["Results"]]))
-    updateSliderInput(
-      session,
-      "n_value",
-      max = slider_max,
-      value = min(50, slider_max)
+      caption = "Analysis summary"
     )
   })
-
-  output$download_heatmap_full <- downloadHandler(
-    filename = function() {
-      paste0("Heatmap_full_", Sys.Date(), ".png")
-    },
-    content = function(file) {
-      req(default_heatmap())
-      png(file, width = 600, height = 600)
-      print(default_heatmap())
-      dev.off()
-    }
-  )
-
-  output$download_heatmap_sig <- downloadHandler(
-    filename = function() {
-      paste0("Heatmap_sig_", Sys.Date(), ".png")
-    },
-    content = function(file) {
-      req(custom_heatmap())
-      png(file, width = 600, height = 600)
-      print(custom_heatmap())
-      dev.off()
-    }
-  )
-
-# PCA ---------------------------------------------------------------------
-
-  output$pcaPlot <- renderPlot({
-    req(analysis_data$qf)
-    fn <- analysis_data$plot_functions[["PCA_plotter"]]
-    req(is.function(fn))
-    p <- fn(analysis_data$qf, i = "Proteins", color = "group")
-    print(p)
-  })
-
-  output$download_pca <- downloadHandler(
-    filename = function() {
-      paste0("PCA", Sys.Date(), ".png")
-    },
-    content = function(file) {
-      req(analysis_data$qf)
-      png(file, width = 530, height = 360)
-      fn <- analysis_data$plot_functions[["PCA_plotter"]]
-      req(is.function(fn))
-      p <- fn(analysis_data$qf, i = "Proteins", color = "group", label = "none")
-      print(p)
-      dev.off()
-    }
-  )
 
 }
