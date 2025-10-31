@@ -609,6 +609,15 @@ function(input, output, session) {
     append_log("Pipeline started")
 
     analysis_data$pipeline_graph <- tryCatch({
+      current_dir <- getwd()
+      on.exit({
+        if (!identical(current_dir, getwd())) {
+          setwd(current_dir)
+        }
+      }, add = TRUE)
+      if (!identical(normalizePath(current_dir, winslash = "/", mustWork = FALSE), repo_root)) {
+        setwd(repo_root)
+      }
       targets::tar_visnetwork(callr_function = NULL)
     }, error = function(e) {
       append_log(paste0("Warning: unable to render targets graph - ", e$message))
