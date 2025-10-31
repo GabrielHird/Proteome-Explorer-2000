@@ -1,0 +1,11 @@
+suppressPackageStartupMessages({
+  library(shiny)
+  library(shinyjs)
+  library(bslib)
+  library(DT)
+  library(plotly)
+  library(bsicons)
+  library(visNetwork)
+  library(targets)
+  library(yaml)
+})
