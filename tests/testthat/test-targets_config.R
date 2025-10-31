@@ -2,6 +2,18 @@ library(testthat)
 
 source(file.path("R", "targets_config.R"))
 
+test_that("pipeline_required_packages enumerates {targets} packages", {
+  pkgs <- pipeline_required_packages()
+  expect_type(pkgs, "character")
+  expect_gt(length(pkgs), 0)
+
+  old_pkgs <- targets::tar_option_get("packages")
+  on.exit(targets::tar_option_set(packages = old_pkgs), add = TRUE)
+
+  targets::tar_option_set(packages = pkgs)
+  expect_setequal(targets::tar_option_get("packages"), pkgs)
+})
+
 test_that("prepare_pipeline_config tolerates missing output directories when create_dirs = FALSE", {
   tmp_repo <- tempfile("pex_repo")
   dir.create(tmp_repo)
