@@ -34,7 +34,7 @@ page_navbar(
   title = "Proteome Explorer Interactive",
   theme = bs_theme(bootswatch = "spacelab"),
   tags$head(
-    tags$style(HTML("
+    tags$style(HTML(" 
     /* Force a fixed table layout */
     .dataTables_wrapper table {
       table-layout: fixed;
@@ -49,7 +49,17 @@ page_navbar(
       padding: 2px 4px;
       font-size: 12px;
     }
-  "))
+  ")),
+    tags$script(HTML("Shiny.addCustomMessageHandler('pex-scroll-log', function() {
+      var el = document.getElementById('pipeline_log');
+      if (!el) {
+        return;
+      }
+      var target = el.tagName === 'PRE' ? el : el.querySelector('pre');
+      if (target) {
+        target.scrollTop = target.scrollHeight;
+      }
+    });"))
   ),
 
 
