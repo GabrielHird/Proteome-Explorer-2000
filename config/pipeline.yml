@@ -1,0 +1,51 @@
+Project_name: "PExA Lungcancer v6"
+Analysis_run: "EBP_v1_detect"
+First_pass: true
+Run_normalizer: true
+Run_DEA: true
+Run_GSEA: true
+save_plots: true
+export_data: true
+subtype: false
+Run_Interactive: false
+Treatment_group: "Cancer"
+Reference_group: "Normal"
+Import_qval: 0.01
+Import_pg_qval: 0.01
+Group_treshold: 0.75
+Global_treshold: 0.6
+Treshold_level: "Group"
+peptide_level: true
+Norm_method: "CycLoess"
+Batch_corr: "eigenms"
+Agg_method: "robustsummary"
+Impute: false
+impute_MAR: null
+impute_MNAR: null
+impute_method: null
+DEA_method: "msqrob"
+Study_design: "unpaired"
+alpha: 0.05
+logFC_cutoff: null
+Org_db: "org.Hs.eg.db"
+Boxplot_prot:
+  - "CSTA"
+Agg_prot:
+  - "CSTA"
+Group_colors:
+  Cancer: "#FABC3C"
+  Normal: "#006D77"
+heatmap_annot:
+  Group: "group"
+  Batch: "Extraction_batch"
+  Study: "Study"
+  Membrane: "PExA_membrane"
+Expression_lvl_color:
+  OVER: "#CB4335"
+  UNDER: "#2E86C1"
+DIA_nn_path: "./Data/DIA-NN output/diann_report_EBP.tsv"
+FASTA_path: "./Data/FASTA file/EBP.fasta"
+Sample_data_path: "./Data/Sample Metadata/EBP_sample_data.xlsx"
+Your_name: "Gabriel Hirdman"
+Lab_name: "Lindstedt Lab"
+Contact: "gabriel.hirdman@med.lu.se"

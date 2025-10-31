@@ -23,6 +23,9 @@ function(input, output, session) {
   )
   pipeline_dir <- normalizePath(pipeline_dir, winslash = "/", mustWork = FALSE)
 
+  sys.source(file.path(repo_root, "R", "targets_config.R"), envir = environment())
+  sys.source(file.path(repo_root, "R", "targets_pipeline.R"), envir = environment())
+
   default_config <- list(
     Project_name = "PExA Lungcancer v6",
     Analysis_run = "EBP_v1_detect",
@@ -397,24 +400,17 @@ function(input, output, session) {
     append_log("Pipeline started")
 
     withProgress(message = "Executing pipeline", value = 0, {
-      pipeline_env <- new.env(parent = globalenv())
-      for (nm in names(config)) {
-        assign(nm, config[[nm]], envir = pipeline_env)
-      }
-
-      options(pex_pipeline_dir = pipeline_dir)
-      old_wd <- getwd()
-      on.exit({
-        setwd(old_wd)
-        options(pex_pipeline_dir = NULL)
-      }, add = TRUE)
-      setwd(repo_root)
-
       captured_output <- character()
+      prepared_config <- NULL
+      pipeline_state <- NULL
+
       result <- tryCatch({
-        captured_output <- capture.output({
+        local_config <- prepare_pipeline_config(config = config, repo_root = repo_root)
+        local_state <- NULL
+
+        captured_output <<- capture.output({
           withCallingHandlers({
-            sys.source(file.path(pipeline_dir, "01_initiation.R"), envir = pipeline_env)
+            local_state <<- run_full_pipeline(local_config)
           },
           message = function(m) {
             append_log(m$message)
@@ -425,6 +421,9 @@ function(input, output, session) {
             invokeRestart("muffleWarning")
           })
         }, type = "output")
+
+        prepared_config <<- local_config
+        pipeline_state <<- local_state
         TRUE
       }, error = function(e) {
         append_log(paste0("Error: ", e$message))
@@ -436,11 +435,11 @@ function(input, output, session) {
         append_log(captured_output)
       }
 
-      if (isTRUE(result) && exists("qf", envir = pipeline_env)) {
-        analysis_data$qf <- pipeline_env$qf
-        analysis_data$Norm_method <- config$Norm_method
-        analysis_data$results_folder <- pipeline_env$results_folder %||% NULL
-        analysis_data$config <- config
+      if (isTRUE(result) && !is.null(pipeline_state$qf)) {
+        analysis_data$qf <- pipeline_state$qf
+        analysis_data$Norm_method <- prepared_config$Norm_method
+        analysis_data$results_folder <- prepared_config$results_folder
+        analysis_data$config <- prepared_config
         analysis_data$status <- "Analysis completed"
         append_log("Pipeline completed successfully")
 
@@ -458,11 +457,7 @@ function(input, output, session) {
         )
 
         analysis_data$plot_functions <- lapply(setNames(required_functions, required_functions), function(fn) {
-          if (exists(fn, envir = pipeline_env, mode = "function")) {
-            get(fn, envir = pipeline_env)
-          } else {
-            NULL
-          }
+          pipeline_state[[fn]] %||% NULL
         })
       } else if (!isTRUE(result)) {
         analysis_data$status <- "Pipeline failed"
