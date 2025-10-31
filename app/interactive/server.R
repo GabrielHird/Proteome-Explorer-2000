@@ -13,7 +13,14 @@ function(input, output, session) {
   )
   repo_root <- normalizePath(repo_root, winslash = "/", mustWork = FALSE)
   if (!dir.exists(repo_root)) {
-    repo_root <- normalizePath(".", winslash = "/", mustWork = TRUE)
+    repo_root <- normalizePath(".", winslash = "/", mustWork = FALSE)
+  }
+  if (!dir.exists(file.path(repo_root, "R"))) {
+    stop(
+      "The Proteome Explorer 'R' directory could not be found at ",
+      repo_root,
+      ". Launch the app from the repository root so the shared scripts are available."
+    )
   }
 
   pipeline_dir <- get0(
@@ -23,8 +30,22 @@ function(input, output, session) {
   )
   pipeline_dir <- normalizePath(pipeline_dir, winslash = "/", mustWork = FALSE)
 
-  sys.source(file.path(repo_root, "R", "targets_config.R"), envir = environment())
-  sys.source(file.path(repo_root, "R", "targets_pipeline.R"), envir = environment())
+  repo_file <- function(...) {
+    path <- file.path(repo_root, ...)
+    if (!file.exists(path)) {
+      stop(
+        sprintf(
+          "Expected to find '%s' inside the repository root (%s) but it was missing.",
+          file.path(...),
+          repo_root
+        )
+      )
+    }
+    path
+  }
+
+  sys.source(repo_file("R", "targets_config.R"), envir = environment())
+  sys.source(repo_file("R", "targets_pipeline.R"), envir = environment())
 
   default_config <- list(
     Project_name = "PExA Lungcancer v6",

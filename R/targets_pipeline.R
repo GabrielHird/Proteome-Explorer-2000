@@ -21,6 +21,19 @@ load_pipeline_packages <- function(packages = NULL) {
     )
   }
 
+  if ("conflicted" %in% loadedNamespaces()) {
+    conflicted::conflicts_prefer(
+      QFeatures::longFormat,
+      dplyr::slice,
+      dplyr::filter,
+      dplyr::rename,
+      dplyr::setdiff,
+      dplyr::select,
+      base::as.factor,
+      base::unname
+    )
+  }
+
   invisible(packages)
 }
 
