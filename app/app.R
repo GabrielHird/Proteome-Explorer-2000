@@ -17,11 +17,30 @@ suppressPackageStartupMessages({
 }
 
 cwd <- normalizePath(getwd(), winslash = "/", mustWork = TRUE)
-repo_candidate <- normalizePath(file.path(cwd, ".."), winslash = "/", mustWork = FALSE)
-if (!file.exists(file.path(repo_candidate, "pipeline"))) {
-  repo_candidate <- cwd
+parent_candidate <- normalizePath(file.path(cwd, ".."), winslash = "/", mustWork = FALSE)
+
+potential_roots <- unique(c(parent_candidate, cwd))
+repo_root <- NULL
+for (candidate in potential_roots) {
+  if (!length(candidate) || !dir.exists(candidate)) {
+    next
+  }
+  candidate <- normalizePath(candidate, winslash = "/", mustWork = FALSE)
+  if (dir.exists(file.path(candidate, "R"))) {
+    repo_root <- candidate
+    break
+  }
 }
-repo_root <- normalizePath(repo_candidate, winslash = "/", mustWork = TRUE)
+
+if (is.null(repo_root)) {
+  stop(
+    "Unable to locate the Proteome Explorer repository root. ",
+    "Ensure that the 'R' folder exists in the project directory and ",
+    "launch the app with runApp('app') from the repository root."
+  )
+}
+
+repo_root <- normalizePath(repo_root, winslash = "/", mustWork = TRUE)
 app_dir <- normalizePath(file.path(repo_root, "app"), winslash = "/", mustWork = TRUE)
 interactive_dir <- normalizePath(file.path(app_dir, "interactive"), winslash = "/", mustWork = TRUE)
 pipeline_dir <- normalizePath(file.path(repo_root, "pipeline"), winslash = "/", mustWork = TRUE)
