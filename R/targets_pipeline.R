@@ -16,9 +16,6 @@ load_pipeline_packages <- function(packages = NULL) {
     if (!requireNamespace(pkg, quietly = TRUE)) {
       stop(sprintf("Required package '%s' is not installed.", pkg))
     }
-    suppressPackageStartupMessages(
-      library(pkg, character.only = TRUE)
-    )
   }
 
   if ("conflicted" %in% loadedNamespaces()) {
@@ -37,6 +34,37 @@ load_pipeline_packages <- function(packages = NULL) {
   invisible(packages)
 }
 
+create_package_exports_env <- function(packages, parent_env) {
+  if (!length(packages)) {
+    return(parent_env)
+  }
+
+  parent <- parent_env
+
+  for (pkg in packages) {
+    exports_env <- new.env(parent = parent)
+    exports <- getNamespaceExports(pkg)
+
+    for (nm in exports) {
+      makeActiveBinding(
+        nm,
+        local({
+          pkg_name <- pkg
+          export_name <- nm
+          function() {
+            getExportedValue(pkg_name, export_name)
+          }
+        }),
+        env = exports_env
+      )
+    }
+
+    parent <- exports_env
+  }
+
+  parent
+}
+
 create_pipeline_helpers_env <- function(repo_root,
                                         packages = NULL,
                                         parent_env = NULL) {
@@ -48,7 +76,8 @@ create_pipeline_helpers_env <- function(repo_root,
   }
 
   loaded_packages <- load_pipeline_packages(packages)
-  helpers <- new.env(parent = parent_env)
+  package_parent <- create_package_exports_env(loaded_packages, parent_env)
+  helpers <- new.env(parent = package_parent)
   attr(helpers, "pex_loaded_packages") <- loaded_packages
   sys.source(file.path(repo_root, "R", "pipeline_functions.R"), envir = helpers)
   helpers
