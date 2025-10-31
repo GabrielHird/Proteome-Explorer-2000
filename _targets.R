@@ -1,0 +1,77 @@
+library(targets)
+
+source("R/targets_config.R")
+source("R/targets_pipeline.R")
+
+required_packages <- c(
+  "yaml",
+  "dplyr",
+  "filenamer",
+  "data.table",
+  "BiocParallel",
+  "conflicted",
+  "readr",
+  "readxl",
+  "openxlsx",
+  "iq",
+  "Biobase",
+  "SummarizedExperiment",
+  "msdap",
+  "QFeatures",
+  "stringr",
+  "NormalyzerDE",
+  "imputeLCMD",
+  "ProteoMM",
+  "sva",
+  "hexbin",
+  "proDA",
+  "limma",
+  "DEqMS",
+  "msqrob2",
+  "msEmpiRe",
+  "ComplexHeatmap",
+  "ggrepel",
+  "uwot",
+  "mixOmics",
+  "clusterProfiler",
+  "org.Hs.eg.db",
+  "enrichplot",
+  "GSVA",
+  "msigdbr",
+  "shiny",
+  "bslib",
+  "plotly",
+  "patchwork",
+  "naniar",
+  "corrplot",
+  "FactoMineR",
+  "factoextra",
+  "DT",
+  "queryup",
+  "bsicons",
+  "RColorBrewer",
+  "forcats",
+  "paletteer",
+  "scales",
+  "GGally",
+  "hrbrthemes",
+  "ggplot2",
+  "tibble",
+  "tidyr",
+  "purrr",
+  "Biostrings"
+)
+
+tar_option_set(packages = required_packages)
+
+list(
+  tar_target(pipeline_config, prepare_pipeline_config()),
+  tar_target(import_state, run_import(pipeline_config)),
+  tar_target(preprocessed_state, run_preprocess(pipeline_config, import_state)),
+  tar_target(dea_state, run_dea(pipeline_config, preprocessed_state)),
+  tar_target(postprocess_state, run_postprocess(pipeline_config, dea_state)),
+  tar_target(pathway_state, run_pathway(pipeline_config, postprocess_state)),
+  tar_target(export_state, run_export(pipeline_config, pathway_state)),
+  tar_target(report_state, run_report(pipeline_config, export_state)),
+  tar_target(report_file, report_state$report_file, format = "file")
+)
