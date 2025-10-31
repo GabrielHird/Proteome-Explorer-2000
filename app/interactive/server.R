@@ -190,6 +190,20 @@ function(input, output, session) {
     pipeline_graph = NULL
   )
 
+  flush_pipeline_outputs <- function(scroll = FALSE) {
+    try(shiny::flushReact(), silent = TRUE)
+    if (isTRUE(scroll)) {
+      session$sendCustomMessage("pex-scroll-log", list())
+    }
+  }
+
+  set_pipeline_status <- function(text, immediate = TRUE) {
+    analysis_data$status <- text
+    if (isTRUE(immediate)) {
+      flush_pipeline_outputs()
+    }
+  }
+
   append_log <- function(text) {
     if (length(text) == 0) {
       return(invisible(NULL))
@@ -201,6 +215,7 @@ function(input, output, session) {
     }
     timestamp <- format(Sys.time(), "%H:%M:%S")
     analysis_data$logs <- c(analysis_data$logs, paste(timestamp, "-", text))
+    flush_pipeline_outputs(scroll = TRUE)
     invisible(NULL)
   }
 
@@ -404,7 +419,7 @@ function(input, output, session) {
     if (length(missing_paths) > 0) {
       msg <- paste0("Missing required file(s): ", paste(missing_paths, collapse = ", "), ".")
       showNotification(msg, type = "error")
-      analysis_data$status <- "File validation failed"
+      set_pipeline_status("File validation failed")
       append_log(msg)
       return()
     }
@@ -421,7 +436,7 @@ function(input, output, session) {
 
     analysis_data$plot_functions <- list()
     analysis_data$running <- TRUE
-    analysis_data$status <- "Running analysis..."
+    set_pipeline_status("Running analysis...")
     analysis_data$logs <- character()
     append_log("Pipeline started")
 
@@ -450,7 +465,7 @@ function(input, output, session) {
                 on_step_start = function(step, index, total) {
                   label <- step_labels[[step]] %||% step
                   append_log(sprintf("Starting %s (%d/%d)", label, index, total))
-                  analysis_data$status <- sprintf("Running %s (%d/%d)", label, index, total)
+                  set_pipeline_status(sprintf("Running %s (%d/%d)", label, index, total))
                   setProgress(
                     value = (index - 1) / total,
                     detail = sprintf("Running %s...", label)
@@ -496,7 +511,7 @@ function(input, output, session) {
         analysis_data$Norm_method <- prepared_config$Norm_method
         analysis_data$results_folder <- prepared_config$results_folder
         analysis_data$config <- prepared_config
-        analysis_data$status <- "Analysis completed"
+        set_pipeline_status("Analysis completed")
         setProgress(value = 1, detail = "Pipeline completed successfully")
         append_log("Pipeline completed successfully")
 
@@ -517,10 +532,10 @@ function(input, output, session) {
           pipeline_state[[fn]] %||% NULL
         })
       } else if (!isTRUE(result)) {
-        analysis_data$status <- "Pipeline failed"
+        set_pipeline_status("Pipeline failed")
         setProgress(value = 1, detail = "Pipeline failed")
       } else {
-        analysis_data$status <- "Pipeline finished without returning results"
+        set_pipeline_status("Pipeline finished without returning results")
         showNotification("Pipeline finished but no results were produced.", type = "warning")
         setProgress(value = 1, detail = "Pipeline finished without results")
       }
