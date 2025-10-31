@@ -76,6 +76,10 @@ page_navbar(
       layout_columns(
         col_widths = c(12),
         card(
+          card_header("Pipeline overview"),
+          visNetwork::visNetworkOutput("pipeline_network", height = "450px")
+        ),
+        card(
           card_header("Analysis settings"),
           div(
             class = "mb-4",

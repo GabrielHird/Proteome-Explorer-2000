@@ -8,6 +8,7 @@ suppressPackageStartupMessages({
   library(plotly)
   library(DT)
   library(bsicons)
+  library(visNetwork)
 })
 
 `%||%` <- function(x, y) {
