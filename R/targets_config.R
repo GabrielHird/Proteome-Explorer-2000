@@ -205,16 +205,18 @@ prepare_pipeline_config <- function(config = NULL,
     dir.create(results_data_folder, recursive = TRUE, showWarnings = FALSE)
   }
 
+  must_work_dirs <- isTRUE(create_dirs)
+
   combined$saved_data_folder <- paste0(
-    normalizePath(saved_data_folder, winslash = "/", mustWork = TRUE),
+    normalizePath(saved_data_folder, winslash = "/", mustWork = must_work_dirs),
     "/"
   )
   combined$results_folder <- paste0(
-    normalizePath(results_folder, winslash = "/", mustWork = TRUE),
+    normalizePath(results_folder, winslash = "/", mustWork = must_work_dirs),
     "/"
   )
   combined$results_data_folder <- paste0(
-    normalizePath(results_data_folder, winslash = "/", mustWork = TRUE),
+    normalizePath(results_data_folder, winslash = "/", mustWork = must_work_dirs),
     "/"
   )
 
