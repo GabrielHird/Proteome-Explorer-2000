@@ -37,9 +37,19 @@ load_pipeline_packages <- function(packages = NULL) {
   invisible(packages)
 }
 
-create_pipeline_helpers_env <- function(repo_root) {
-  helpers <- new.env(parent = baseenv())
-  load_pipeline_packages()
+create_pipeline_helpers_env <- function(repo_root,
+                                        packages = NULL,
+                                        parent_env = NULL) {
+  if (is.null(parent_env)) {
+    parent_env <- parent.frame()
+    if (identical(parent_env, emptyenv())) {
+      parent_env <- .GlobalEnv
+    }
+  }
+
+  loaded_packages <- load_pipeline_packages(packages)
+  helpers <- new.env(parent = parent_env)
+  attr(helpers, "pex_loaded_packages") <- loaded_packages
   sys.source(file.path(repo_root, "R", "pipeline_functions.R"), envir = helpers)
   helpers
 }
