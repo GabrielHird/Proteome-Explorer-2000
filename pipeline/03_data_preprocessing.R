@@ -117,14 +117,15 @@ if(Impute == TRUE) {
                randna = rowData(qf)[["PeptidesNorm"]]$randna,
                mar = impute_MAR,
                mnar = impute_MNAR)
-  
+
+  rm(randna)
+
   }
-  
+
   qf <- addAssay(qf, qf[["PeptidesImp"]], name = "PeptidesProccessed")
   qf <- addAssayLinkOneToOne(qf, from = "PeptidesImp", to = "PeptidesProccessed")
-  rm(randna)
-  
-} 
+
+}
 
 if(Impute == FALSE) {
   qf <- addAssay(qf, qf[["PeptidesNorm"]], name = "PeptidesProccessed")
