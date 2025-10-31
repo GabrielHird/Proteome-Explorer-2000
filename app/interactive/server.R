@@ -306,18 +306,12 @@ function(input, output, session) {
     updateTextInput(session, "contact", value = default_config$Contact)
   })
 
-  observe({
-    if (!analysis_data$running) {
-      analysis_data$logs <- character()
-      analysis_data$status <- "Awaiting analysis"
-    }
-  })
-
   output$pipeline_status <- renderUI({
     status <- analysis_data$status
     badge_status <- dplyr::case_when(
       status == "Awaiting analysis" ~ "secondary",
       status == "Running analysis..." ~ "primary",
+      startsWith(status, "Running ") ~ "primary",
       status == "Analysis completed" ~ "success",
       status == "Pipeline failed" ~ "danger",
       status == "Pipeline finished without returning results" ~ "warning",
@@ -415,6 +409,16 @@ function(input, output, session) {
       return()
     }
 
+    step_labels <- c(
+      import = "Import data",
+      preprocess = "Data preprocessing",
+      dea = "Differential expression analysis",
+      postprocess = "Post-processing",
+      pathway = "Pathway analysis",
+      export = "Export and visualization",
+      report = "Generate report"
+    )
+
     analysis_data$plot_functions <- list()
     analysis_data$running <- TRUE
     analysis_data$status <- "Running analysis..."
@@ -432,6 +436,7 @@ function(input, output, session) {
       captured_output <- character()
       prepared_config <- NULL
       pipeline_state <- NULL
+      setProgress(value = 0, detail = "Preparing configuration...")
 
       result <- tryCatch({
         local_config <- prepare_pipeline_config(config = config, repo_root = repo_root)
@@ -439,7 +444,28 @@ function(input, output, session) {
 
         captured_output <<- capture.output({
           withCallingHandlers({
-            local_state <<- run_full_pipeline(local_config)
+            local_state <<- run_full_pipeline(
+              local_config,
+              callbacks = list(
+                on_step_start = function(step, index, total) {
+                  label <- step_labels[[step]] %||% step
+                  append_log(sprintf("Starting %s (%d/%d)", label, index, total))
+                  analysis_data$status <- sprintf("Running %s (%d/%d)", label, index, total)
+                  setProgress(
+                    value = (index - 1) / total,
+                    detail = sprintf("Running %s...", label)
+                  )
+                },
+                on_step_complete = function(step, index, total) {
+                  label <- step_labels[[step]] %||% step
+                  append_log(sprintf("Completed %s (%d/%d)", label, index, total))
+                  setProgress(
+                    value = index / total,
+                    detail = sprintf("Completed %s", label)
+                  )
+                }
+              )
+            )
           },
           message = function(m) {
             append_log(m$message)
@@ -456,6 +482,7 @@ function(input, output, session) {
         TRUE
       }, error = function(e) {
         append_log(paste0("Error: ", e$message))
+        setProgress(value = 1, detail = "Pipeline failed")
         showNotification(paste("Pipeline failed:", e$message), type = "error")
         FALSE
       })
@@ -470,6 +497,7 @@ function(input, output, session) {
         analysis_data$results_folder <- prepared_config$results_folder
         analysis_data$config <- prepared_config
         analysis_data$status <- "Analysis completed"
+        setProgress(value = 1, detail = "Pipeline completed successfully")
         append_log("Pipeline completed successfully")
 
         required_functions <- c(
@@ -490,9 +518,11 @@ function(input, output, session) {
         })
       } else if (!isTRUE(result)) {
         analysis_data$status <- "Pipeline failed"
+        setProgress(value = 1, detail = "Pipeline failed")
       } else {
         analysis_data$status <- "Pipeline finished without returning results"
         showNotification("Pipeline finished but no results were produced.", type = "warning")
+        setProgress(value = 1, detail = "Pipeline finished without results")
       }
     })
 
