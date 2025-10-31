@@ -2,8 +2,6 @@
 #Gabriel Hirdman Proteome Explorer v1.0® 2025#
 ##############################################
 
-# Server ------------------------------------------------------------------
-
 function(input, output, session) {
 
   repo_root <- get0(
@@ -15,865 +13,317 @@ function(input, output, session) {
   if (!dir.exists(repo_root)) {
     repo_root <- normalizePath(".", winslash = "/", mustWork = FALSE)
   }
+
   if (!dir.exists(file.path(repo_root, "R"))) {
     stop(
-      "The Proteome Explorer 'R' directory could not be found at ",
-      repo_root,
-      ". Launch the app from the repository root so the shared scripts are available."
+      "The Proteome Explorer repository root could not be located. ",
+      "Launch the app with runApp('app') from the project root."
     )
   }
 
-  pipeline_dir <- get0(
-    "pipeline_dir",
-    ifnotfound = file.path(repo_root, "pipeline"),
-    inherits = TRUE
-  )
-  pipeline_dir <- normalizePath(pipeline_dir, winslash = "/", mustWork = FALSE)
+  sys.source(file.path(repo_root, "R", "targets_config.R"), envir = environment())
+  sys.source(file.path(repo_root, "R", "targets_pipeline.R"), envir = environment())
+  sys.source(file.path(repo_root, "R", "app_targets.R"), envir = environment())
 
-  repo_file <- function(...) {
-    path <- file.path(repo_root, ...)
-    if (!file.exists(path)) {
-      stop(
-        sprintf(
-          "Expected to find '%s' inside the repository root (%s) but it was missing.",
-          file.path(...),
-          repo_root
-        )
-      )
-    }
-    path
+  default_config <- pipeline_default_config()
+  runtime_config <- reactiveVal(app_read_runtime_config(repo_root))
+  run_log <- reactiveVal(character())
+  meta_data <- reactiveVal(data.frame())
+  results_listing <- reactiveVal(data.frame())
+  outdated_targets <- reactiveVal(character())
+
+  `%||%` <- function(x, y) {
+    if (is.null(x)) y else x
   }
 
-  sys.source(repo_file("R", "targets_config.R"), envir = environment())
-  sys.source(repo_file("R", "targets_pipeline.R"), envir = environment())
-
-  default_config <- list(
-    Project_name = "PExA Lungcancer v6",
-    Analysis_run = "EBP_v1_detect",
-    First_pass = TRUE,
-    Run_normalizer = TRUE,
-    Run_DEA = TRUE,
-    Run_GSEA = TRUE,
-    save_plots = TRUE,
-    export_data = TRUE,
-    subtype = FALSE,
-    Run_Interactive = FALSE,
-    Treatment_group = "Cancer",
-    Reference_group = "Normal",
-    Import_qval = 0.01,
-    Import_pg_qval = 0.01,
-    Group_treshold = 0.75,
-    Global_treshold = 0.6,
-    Treshold_level = "Group",
-    peptide_level = TRUE,
-    Norm_method = "CycLoess",
-    Batch_corr = "eigenms",
-    Agg_method = "robustsummary",
-    Impute = FALSE,
-    impute_MAR = NA,
-    impute_MNAR = NA,
-    impute_method = NA,
-    DEA_method = "msqrob",
-    Study_design = "unpaired",
-    alpha = 0.05,
-    logFC_cutoff = NA,
-    Org_db = "org.Hs.eg.db",
-    Boxplot_prot = c("CSTA"),
-    Agg_prot = c("CSTA"),
-    Group_colors = c("Cancer" = "#FABC3C", "Normal" = "#006D77"),
-    heatmap_annot = c(
-      "Group" = "group",
-      "Batch" = "Extraction_batch",
-      "Study" = "Study",
-      "Membrane" = "PExA_membrane"
-    ),
-    Expression_lvl_color = c(OVER = "#CB4335", UNDER = "#2E86C1"),
-    DIA_nn_path = "./Data/DIA-NN output/diann_report_EBP.tsv",
-    FASTA_path = "./Data/FASTA file/EBP.fasta",
-    Sample_data_path = "./Data/Sample Metadata/EBP_sample_data.xlsx",
-    Your_name = "Gabriel Hirdman",
-    Lab_name = "Lindstedt Lab",
-    Contact = "gabriel.hirdman@med.lu.se"
-  )
+  to_named_string <- function(x) {
+    if (is.null(x)) {
+      return("")
+    }
+    if (length(x) == 0) {
+      return("")
+    }
+    if (is.null(names(x)) || all(names(x) == "")) {
+      return(paste(x, collapse = ", "))
+    }
+    paste(sprintf("%s = %s", names(x), x), collapse = "\n")
+  }
 
   parse_comma_list <- function(x) {
-    items <- trimws(unlist(strsplit(x %||% "", ",")))
-    items <- items[nzchar(items)]
-    if (length(items) == 0) character() else unique(items)
+    vals <- trimws(unlist(strsplit(x %||% "", ",")))
+    vals <- vals[nzchar(vals)]
+    if (length(vals)) vals else character()
   }
 
   parse_named_lines <- function(x) {
     lines <- strsplit(x %||% "", "\n", fixed = TRUE)[[1]]
     lines <- trimws(lines)
     lines <- lines[nzchar(lines)]
-    if (length(lines) == 0) {
+    if (!length(lines)) {
       return(character())
     }
-    split_lines <- strsplit(lines, "=", fixed = TRUE)
-    vals <- vapply(split_lines, function(parts) {
+    split <- strsplit(lines, "=", fixed = TRUE)
+    values <- vapply(split, function(parts) {
       parts <- trimws(parts)
       if (length(parts) < 2) "" else parts[2]
     }, character(1))
-    names(vals) <- vapply(split_lines, function(parts) {
+    names(values) <- vapply(split, function(parts) {
       parts <- trimws(parts)
       parts[1]
     }, character(1))
-    vals <- vals[nzchar(vals) & nzchar(names(vals))]
-    vals
+    values <- values[nzchar(values) & nzchar(names(values))]
+    values
   }
 
   empty_to_na <- function(x) {
-    if (is.null(x) || x == "") {
-      NA
-    } else {
-      x
+    x <- trimws(x %||% "")
+    if (!nzchar(x)) {
+      return(NA)
     }
+    x
   }
 
-  safe_as_numeric <- function(x) {
-    x <- trimws(x %||% "")
+  safe_numeric <- function(x) {
+    if (is.null(x)) {
+      return(NA_real_)
+    }
+    if (is.numeric(x)) {
+      return(as.numeric(x))
+    }
+    x <- trimws(as.character(x))
     if (!nzchar(x)) {
       return(NA_real_)
     }
     suppressWarnings(as.numeric(x))
   }
 
-  `%||%` <- function(x, y) {
-    if (is.null(x)) y else x
+  update_inputs_from_config <- function(cfg) {
+    updateTextInput(session, "project_name", value = cfg$Project_name)
+    updateTextInput(session, "analysis_run", value = cfg$Analysis_run)
+    updateTextInput(session, "dia_nn_path", value = cfg$DIA_nn_path)
+    updateTextInput(session, "fasta_path", value = cfg$FASTA_path)
+    updateTextInput(session, "sample_data_path", value = cfg$Sample_data_path)
+    updateNumericInput(session, "import_qval", value = cfg$Import_qval)
+    updateNumericInput(session, "import_pg_qval", value = cfg$Import_pg_qval)
+    updateNumericInput(session, "group_threshold", value = cfg$Group_treshold)
+    updateNumericInput(session, "global_threshold", value = cfg$Global_treshold)
+    updateSelectInput(session, "threshold_level", selected = cfg$Treshold_level)
+    updateSelectInput(session, "agg_method", selected = cfg$Agg_method)
+    updateCheckboxInput(session, "peptide_level", value = isTRUE(cfg$peptide_level))
+    updateCheckboxInput(session, "run_normalizer", value = isTRUE(cfg$Run_normalizer))
+    updateSelectInput(session, "norm_method", selected = cfg$Norm_method)
+    updateSelectInput(session, "batch_corr", selected = cfg$Batch_corr)
+    updateCheckboxInput(session, "impute", value = isTRUE(cfg$Impute))
+    updateTextInput(session, "impute_method", value = cfg$impute_method %||% "")
+    updateNumericInput(session, "impute_mar", value = cfg$impute_MAR)
+    updateNumericInput(session, "impute_mnar", value = cfg$impute_MNAR)
+    updateCheckboxInput(session, "run_dea", value = isTRUE(cfg$Run_DEA))
+    updateSelectInput(session, "dea_method", selected = cfg$DEA_method)
+    updateSelectInput(session, "study_design", selected = cfg$Study_design)
+    updateNumericInput(session, "alpha", value = cfg$alpha)
+    updateNumericInput(session, "logfc_cutoff", value = cfg$logFC_cutoff)
+    updateCheckboxInput(session, "run_gsea", value = isTRUE(cfg$Run_GSEA))
+    updateTextInput(session, "org_db", value = cfg$Org_db)
+    updateCheckboxInput(session, "save_plots", value = isTRUE(cfg$save_plots))
+    updateCheckboxInput(session, "export_data", value = isTRUE(cfg$export_data))
+    updateTextInput(session, "treatment_group", value = cfg$Treatment_group)
+    updateTextInput(session, "reference_group", value = cfg$Reference_group)
+    updateTextAreaInput(session, "boxplot_prot", value = paste(cfg$Boxplot_prot, collapse = ", "))
+    updateTextAreaInput(session, "agg_prot", value = paste(cfg$Agg_prot, collapse = ", "))
+    updateTextAreaInput(session, "group_colors", value = to_named_string(cfg$Group_colors))
+    updateTextAreaInput(session, "heatmap_annotations", value = to_named_string(cfg$heatmap_annot))
+    updateTextAreaInput(session, "expression_levels", value = to_named_string(cfg$Expression_lvl_color))
+    updateTextInput(session, "your_name", value = cfg$Your_name)
+    updateTextInput(session, "lab_name", value = cfg$Lab_name)
+    updateTextInput(session, "contact", value = cfg$Contact)
   }
 
-  build_status_badge <- function(text, variant) {
-    badge_fn <- NULL
-    if (exists("bs_badge", mode = "function")) {
-      badge_fn <- get("bs_badge", mode = "function")
-    } else if (exists("bs_badge", envir = asNamespace("bslib"), inherits = FALSE)) {
-      badge_fn <- get("bs_badge", envir = asNamespace("bslib"))
-    }
-
-    classes <- paste0("bg-", variant)
-
-    if (!is.null(badge_fn)) {
-      args <- list(text, class = classes)
-      if ("bs_theme" %in% names(formals(badge_fn))) {
-        args$bs_theme <- bslib::bs_theme()
-      }
-      return(do.call(badge_fn, args))
-    }
-
-    htmltools::span(text, class = paste("badge", classes))
-  }
-
-  resolve_path <- function(path) {
-    path <- trimws(path %||% "")
-    if (!nzchar(path)) {
-      return("")
-    }
-    expanded <- path.expand(path)
-    if (.Platform$OS.type == "windows") {
-      is_abs <- grepl("^[A-Za-z]:[\\/]|^\\\\", expanded)
+  observe({
+    cfg <- runtime_config()
+    update_inputs_from_config(cfg)
+    outdated_targets(tryCatch(app_targets_outdated(repo_root), error = function(e) character()))
+    meta_data(tryCatch(app_targets_meta(repo_root), error = function(e) data.frame()))
+    res_info <- app_collect_results(cfg, repo_root)
+    files <- res_info$files
+    if (!length(files)) {
+      results_listing(data.frame())
     } else {
-      is_abs <- substr(expanded, 1, 1) == "/"
-    }
-    target <- if (is_abs) expanded else file.path(repo_root, expanded)
-    normalizePath(target, winslash = "/", mustWork = FALSE)
-  }
-
-  build_plot_wrappers <- function(pipeline_state, qf, config) {
-    if (is.null(qf)) {
-      return(list())
-    }
-
-    get_fn <- function(name) {
-      fn <- pipeline_state[[name]]
-      if (!is.function(fn)) {
-        return(NULL)
-      }
-      fn
-    }
-
-    available_assays <- names(qf)
-    pick_assay <- function(candidates) {
-      found <- intersect(candidates, available_assays)
-      if (length(found)) {
-        found[[1]]
-      } else if (length(candidates)) {
-        candidates[[1]]
-      } else {
-        character(0)
-      }
-    }
-
-    get_available_genes <- function() {
-      if (!"Results" %in% available_assays) {
-        return(character())
-      }
-      rd <- SummarizedExperiment::rowData(qf[["Results"]])
-      if (is.null(rd$Gene)) {
-        return(character())
-      }
-      unique(as.character(rd$Gene[!is.na(rd$Gene) & nzchar(rd$Gene)]))
-    }
-
-    select_gene <- function(preferred) {
-      available <- get_available_genes()
-      preferred <- preferred %||% character()
-      preferred <- preferred[!is.na(preferred) & nzchar(preferred)]
-      choice <- intersect(preferred, available)
-      if (length(choice)) {
-        return(choice[[1]])
-      }
-      if (length(available)) {
-        return(available[[1]])
-      }
-      NA_character_
-    }
-
-    wrappers <- list()
-
-    barplot_fn <- get_fn("Barplot_IDs")
-    if (!is.null(barplot_fn)) {
-      wrappers$Barplot_IDs <- function() {
-        assay_name <- pick_assay(c("Proteins", "Results"))
-        barplot_fn(qf, i = assay_name %||% "", color = "group", sort = "Counts")
-      }
-    }
-
-    miss_map_fn <- get_fn("miss_map")
-    if (!is.null(miss_map_fn)) {
-      wrappers$miss_map <- function() {
-        miss_map_fn(qf, i = pick_assay(c("Proteins", "Results")))
-      }
-    }
-
-    density_fn <- get_fn("Density_plotter")
-    if (!is.null(density_fn)) {
-      wrappers$Density_plotter <- function(type = c("raw", "normalized")) {
-        type <- match.arg(type)
-        assay_name <- if (identical(type, "normalized")) {
-          pick_assay(c("PeptidesProccessed", "PeptidesNorm"))
-        } else {
-          pick_assay(c("Peptides", "PrecursorsLog", "Precursors"))
-        }
-        plotly::ggplotly(density_fn(qf, i = assay_name %||% ""))
-      }
-    }
-
-    boxplot_fn <- get_fn("Norm_boxplotter")
-    if (!is.null(boxplot_fn)) {
-      wrappers$Norm_boxplotter <- function(type = c("raw", "normalized")) {
-        type <- match.arg(type)
-        assay_name <- if (identical(type, "normalized")) {
-          pick_assay(c("PeptidesProccessed", "PeptidesNorm"))
-        } else {
-          pick_assay(c("Peptides", "PrecursorsLog", "Precursors"))
-        }
-        boxplot_fn(qf, i = assay_name %||% "")
-      }
-    }
-
-    agg_fn <- get_fn("Aggregation_plotter")
-    if (!is.null(agg_fn)) {
-      wrappers$Aggregation_plotter <- function() {
-        gene <- select_gene(config$Agg_prot)
-        if (is.na(gene)) {
-          return(NULL)
-        }
-        tryCatch(agg_fn(qf, gene = gene), error = function(e) {
-          append_log(paste("Aggregation plot failed:", e$message))
-          NULL
-        })
-      }
-    }
-
-    volcano_fn <- get_fn("Volcano_plotter")
-    if (!is.null(volcano_fn)) {
-      wrappers$Volcano_plotter <- function() {
-        volcano_fn(qf)
-      }
-    }
-
-    volcano_highlight_fn <- get_fn("Volcano_plotter_highlight")
-    if (!is.null(volcano_highlight_fn)) {
-      wrappers$Volcano_plotter_highlight <- function() {
-        gene <- select_gene(config$Boxplot_prot)
-        if (is.na(gene)) {
-          return(NULL)
-        }
-        volcano_highlight_fn(qf, gene = gene)
-      }
-    }
-
-    heatmap_fn <- get_fn("make_heatmap")
-    if (!is.null(heatmap_fn)) {
-      wrappers$make_heatmap <- function() {
-        heatmap_obj <- heatmap_fn(
-          qf,
-          i = pick_assay(c("Results", "Proteins")),
-          annot_list = config$heatmap_annot,
-          only_significant = TRUE,
-          n = 25,
-          title = "Significant proteins"
-        )
-        if (is.null(heatmap_obj)) {
-          return(NULL)
-        }
-        grid::grid.newpage()
-        ComplexHeatmap::draw(heatmap_obj)
-        invisible(NULL)
-      }
-    }
-
-    pca_fn <- get_fn("PCA_plotter")
-    if (!is.null(pca_fn)) {
-      wrappers$PCA_plotter <- function() {
-        assay_name <- pick_assay(c("Proteins", "Results"))
-        pca_fn(qf, i = assay_name %||% "", color = "group", label = "none")
-      }
-    }
-
-    boxplot_prot_fn <- get_fn("Boxplot_plotter")
-    if (!is.null(boxplot_prot_fn)) {
-      wrappers$Boxplot_plotter <- function() {
-        plots <- boxplot_prot_fn(qf, Boxplot_prot = config$Boxplot_prot)
-        if (is.list(plots) && length(plots)) {
-          return(plots[[1]])
-        }
-        ggplot2::ggplot() + ggplot2::labs(title = "No boxplot data available") +
-          ggplot2::theme_void()
-      }
-    }
-
-    wrappers
-  }
-
-  analysis_data <- reactiveValues(
-    qf = NULL,
-    Norm_method = default_config$Norm_method,
-    results_folder = NULL,
-    config = default_config,
-    logs = character(),
-    status = "Awaiting analysis",
-    running = FALSE,
-    plot_functions = list(),
-    pipeline_graph = NULL
-  )
-
-  flush_pipeline_outputs <- function(scroll = FALSE) {
-    try(shiny::flushReact(), silent = TRUE)
-    if (isTRUE(scroll)) {
-      session$sendCustomMessage("pex-scroll-log", list())
-    }
-  }
-
-  set_pipeline_status <- function(text, immediate = TRUE) {
-    analysis_data$status <- text
-    if (isTRUE(immediate)) {
-      flush_pipeline_outputs()
-    }
-  }
-
-  append_log <- function(text) {
-    if (length(text) == 0) {
-      return(invisible(NULL))
-    }
-    text <- text[!is.na(text)]
-    text <- text[nzchar(text)]
-    if (!length(text)) {
-      return(invisible(NULL))
-    }
-    timestamp <- format(Sys.time(), "%H:%M:%S")
-    analysis_data$logs <- c(analysis_data$logs, paste(timestamp, "-", text))
-    flush_pipeline_outputs(scroll = TRUE)
-    invisible(NULL)
-  }
-
-  root_volume <- if (.Platform$OS.type == "windows") "C:/" else "/"
-  volumes <- c(
-    "Workspace" = repo_root,
-    "Pipeline" = pipeline_dir,
-    "Home" = path.expand("~"),
-    "Root" = root_volume
-  )
-  volumes <- volumes[dir.exists(volumes)]
-  if (!length(volumes)) {
-    volumes <- c("Workspace" = repo_root)
-  }
-
-  shinyFiles::shinyFileChoose(
-    input,
-    id = "dia_path_browse",
-    session = session,
-    roots = volumes,
-    filetypes = c("", "tsv", "csv", "txt")
-  )
-  shinyFiles::shinyFileChoose(
-    input,
-    id = "fasta_path_browse",
-    session = session,
-    roots = volumes,
-    filetypes = c("", "fasta", "fa")
-  )
-  shinyFiles::shinyFileChoose(
-    input,
-    id = "sample_path_browse",
-    session = session,
-    roots = volumes,
-    filetypes = c("", "xlsx", "xls", "csv")
-  )
-
-  observeEvent(input$dia_path_browse, {
-    files <- shinyFiles::parseFilePaths(volumes, input$dia_path_browse)
-    if (nrow(files) > 0) {
-      path <- normalizePath(files$datapath[1], winslash = "/", mustWork = FALSE)
-      updateTextInput(session, "dia_path", value = path)
-    }
-  })
-
-  observeEvent(input$fasta_path_browse, {
-    files <- shinyFiles::parseFilePaths(volumes, input$fasta_path_browse)
-    if (nrow(files) > 0) {
-      path <- normalizePath(files$datapath[1], winslash = "/", mustWork = FALSE)
-      updateTextInput(session, "fasta_path", value = path)
-    }
-  })
-
-  observeEvent(input$sample_path_browse, {
-    files <- shinyFiles::parseFilePaths(volumes, input$sample_path_browse)
-    if (nrow(files) > 0) {
-      path <- normalizePath(files$datapath[1], winslash = "/", mustWork = FALSE)
-      updateTextInput(session, "sample_path", value = path)
+      rel_paths <- files
+      repo_prefix <- paste0(repo_root, "/")
+      rel_paths[startsWith(rel_paths, repo_prefix)] <- substring(rel_paths[startsWith(rel_paths, repo_prefix)], nchar(repo_prefix) + 1)
+      results_listing(data.frame(
+        name = basename(files),
+        path = rel_paths,
+        stringsAsFactors = FALSE
+      ))
     }
   })
 
   observeEvent(input$reset_defaults, {
-    updateTextInput(session, "project_name", value = default_config$Project_name)
-    updateTextInput(session, "analysis_run", value = default_config$Analysis_run)
-    updateCheckboxInput(session, "first_pass", value = default_config$First_pass)
-    updateCheckboxInput(session, "run_normalizer", value = default_config$Run_normalizer)
-    updateCheckboxInput(session, "run_dea", value = default_config$Run_DEA)
-    updateCheckboxInput(session, "run_gsea", value = default_config$Run_GSEA)
-    updateCheckboxInput(session, "save_plots", value = default_config$save_plots)
-    updateCheckboxInput(session, "export_data", value = default_config$export_data)
-    updateCheckboxInput(session, "subtype", value = default_config$subtype)
-    updateCheckboxInput(session, "run_interactive", value = default_config$Run_Interactive)
-    updateTextInput(session, "treatment_group", value = default_config$Treatment_group)
-    updateTextInput(session, "reference_group", value = default_config$Reference_group)
-    updateNumericInput(session, "import_qval", value = default_config$Import_qval)
-    updateNumericInput(session, "import_pg_qval", value = default_config$Import_pg_qval)
-    updateNumericInput(session, "group_treshold", value = default_config$Group_treshold)
-    updateNumericInput(session, "global_treshold", value = default_config$Global_treshold)
-    updateSelectInput(session, "treshold_level", selected = default_config$Treshold_level)
-    updateCheckboxInput(session, "peptide_level", value = default_config$peptide_level)
-    updateSelectInput(session, "norm_method", selected = default_config$Norm_method)
-    updateSelectInput(session, "batch_corr", selected = default_config$Batch_corr)
-    updateSelectInput(session, "agg_method", selected = default_config$Agg_method)
-    updateCheckboxInput(session, "impute", value = default_config$Impute)
-    updateTextInput(session, "impute_mar", value = ifelse(is.na(default_config$impute_MAR), "", default_config$impute_MAR))
-    updateTextInput(session, "impute_mnar", value = ifelse(is.na(default_config$impute_MNAR), "", default_config$impute_MNAR))
-    updateTextInput(session, "impute_method", value = ifelse(is.na(default_config$impute_method), "", default_config$impute_method))
-    updateSelectInput(session, "dea_method", selected = default_config$DEA_method)
-    updateSelectInput(session, "study_design", selected = default_config$Study_design)
-    updateNumericInput(session, "alpha", value = default_config$alpha)
-    updateTextInput(session, "logfc_cutoff", value = ifelse(is.na(default_config$logFC_cutoff), "", default_config$logFC_cutoff))
-    updateTextInput(session, "org_db", value = default_config$Org_db)
-    updateTextInput(session, "boxplot_prot", value = paste(default_config$Boxplot_prot, collapse = ", "))
-    updateTextInput(session, "agg_prot", value = paste(default_config$Agg_prot, collapse = ", "))
-    updateTextAreaInput(session, "group_colors", value = paste(sprintf("%s = %s", names(default_config$Group_colors), default_config$Group_colors), collapse = "\n"))
-    updateTextAreaInput(session, "expression_lvl_color", value = paste(sprintf("%s = %s", names(default_config$Expression_lvl_color), default_config$Expression_lvl_color), collapse = "\n"))
-    updateTextAreaInput(session, "heatmap_annot", value = paste(sprintf("%s = %s", names(default_config$heatmap_annot), default_config$heatmap_annot), collapse = "\n"))
-    updateTextInput(session, "dia_path", value = default_config$DIA_nn_path)
-    updateTextInput(session, "fasta_path", value = default_config$FASTA_path)
-    updateTextInput(session, "sample_path", value = default_config$Sample_data_path)
-    updateTextInput(session, "your_name", value = default_config$Your_name)
-    updateTextInput(session, "lab_name", value = default_config$Lab_name)
-    updateTextInput(session, "contact", value = default_config$Contact)
-  })
-
-  output$pipeline_status <- renderUI({
-    status <- analysis_data$status
-    badge_status <- dplyr::case_when(
-      status == "Awaiting analysis" ~ "secondary",
-      status == "Running analysis..." ~ "primary",
-      startsWith(status, "Running ") ~ "primary",
-      status == "Analysis completed" ~ "success",
-      status == "Pipeline failed" ~ "danger",
-      status == "Pipeline finished without returning results" ~ "warning",
-      status == "File validation failed" ~ "danger",
-      status == "Pipeline finished but no results were produced." ~ "warning",
-      TRUE ~ "secondary"
-    )
-    tagList(
-      strong("Status:"),
-      build_status_badge(status, badge_status)
-    )
-  })
-
-  output$pipeline_log <- renderText({
-    if (!length(analysis_data$logs)) {
-      "Pipeline logs will appear here."
-    } else {
-      paste(analysis_data$logs, collapse = "\n")
-    }
+    runtime_config(default_config)
+    update_inputs_from_config(default_config)
+    showNotification("Settings reset to defaults.", type = "message")
   })
 
   observeEvent(input$run_pipeline, {
-
-    if (analysis_data$running) {
-      showNotification("Pipeline is already running.", type = "message")
-      return()
-    }
-
-    config <- list(
-      Project_name = input$project_name,
-      Analysis_run = input$analysis_run,
-      First_pass = input$first_pass,
-      Run_normalizer = input$run_normalizer,
-      Run_DEA = input$run_dea,
-      Run_GSEA = input$run_gsea,
-      save_plots = input$save_plots,
-      export_data = input$export_data,
-      subtype = input$subtype,
-      Run_Interactive = input$run_interactive,
-      Treatment_group = input$treatment_group,
-      Reference_group = input$reference_group,
-      Import_qval = input$import_qval,
-      Import_pg_qval = input$import_pg_qval,
-      Group_treshold = input$group_treshold,
-      Global_treshold = input$global_treshold,
-      Treshold_level = input$treshold_level,
-      peptide_level = input$peptide_level,
-      Norm_method = input$norm_method,
-      Batch_corr = input$batch_corr,
-      Agg_method = input$agg_method,
-      Impute = input$impute,
-      impute_MAR = empty_to_na(input$impute_mar),
-      impute_MNAR = empty_to_na(input$impute_mnar),
+    overrides <- list(
+      Project_name = trimws(input$project_name %||% default_config$Project_name),
+      Analysis_run = trimws(input$analysis_run %||% default_config$Analysis_run),
+      DIA_nn_path = trimws(input$dia_nn_path %||% default_config$DIA_nn_path),
+      FASTA_path = trimws(input$fasta_path %||% default_config$FASTA_path),
+      Sample_data_path = trimws(input$sample_data_path %||% default_config$Sample_data_path),
+      Import_qval = safe_numeric(input$import_qval),
+      Import_pg_qval = safe_numeric(input$import_pg_qval),
+      Group_treshold = safe_numeric(input$group_threshold),
+      Global_treshold = safe_numeric(input$global_threshold),
+      Treshold_level = input$threshold_level %||% default_config$Treshold_level,
+      Agg_method = input$agg_method %||% default_config$Agg_method,
+      peptide_level = isTRUE(input$peptide_level),
+      Run_normalizer = isTRUE(input$run_normalizer),
+      Norm_method = input$norm_method %||% default_config$Norm_method,
+      Batch_corr = input$batch_corr %||% default_config$Batch_corr,
+      Impute = isTRUE(input$impute),
       impute_method = empty_to_na(input$impute_method),
-      DEA_method = input$dea_method,
-      Study_design = input$study_design,
-      alpha = input$alpha,
-      logFC_cutoff = safe_as_numeric(input$logfc_cutoff),
-      Org_db = input$org_db,
+      impute_MAR = safe_numeric(input$impute_mar),
+      impute_MNAR = safe_numeric(input$impute_mnar),
+      Run_DEA = isTRUE(input$run_dea),
+      DEA_method = input$dea_method %||% default_config$DEA_method,
+      Study_design = input$study_design %||% default_config$Study_design,
+      alpha = safe_numeric(input$alpha),
+      logFC_cutoff = safe_numeric(input$logfc_cutoff),
+      Run_GSEA = isTRUE(input$run_gsea),
+      Org_db = trimws(input$org_db %||% default_config$Org_db),
+      save_plots = isTRUE(input$save_plots),
+      export_data = isTRUE(input$export_data),
+      Treatment_group = trimws(input$treatment_group %||% default_config$Treatment_group),
+      Reference_group = trimws(input$reference_group %||% default_config$Reference_group),
       Boxplot_prot = parse_comma_list(input$boxplot_prot),
       Agg_prot = parse_comma_list(input$agg_prot),
       Group_colors = parse_named_lines(input$group_colors),
-      heatmap_annot = parse_named_lines(input$heatmap_annot),
-      Expression_lvl_color = parse_named_lines(input$expression_lvl_color),
-      DIA_nn_path = resolve_path(input$dia_path),
-      FASTA_path = resolve_path(input$fasta_path),
-      Sample_data_path = resolve_path(input$sample_path),
-      Your_name = input$your_name,
-      Lab_name = input$lab_name,
-      Contact = input$contact
+      heatmap_annot = parse_named_lines(input$heatmap_annotations),
+      Expression_lvl_color = parse_named_lines(input$expression_levels),
+      Your_name = trimws(input$your_name %||% default_config$Your_name),
+      Lab_name = trimws(input$lab_name %||% default_config$Lab_name),
+      Contact = trimws(input$contact %||% default_config$Contact)
     )
 
-    if (length(config$Group_colors) == 0) {
-      showNotification("Please provide at least one group color (format: Group = #HEX).", type = "error")
-      return()
-    }
+    combined <- modifyList(default_config, overrides, keep.null = TRUE)
+    runtime_config(combined)
+    app_write_runtime_config(combined, repo_root)
 
-    if (length(config$heatmap_annot) == 0) {
-      showNotification("Please provide at least one heatmap annotation mapping.", type = "error")
-      return()
-    }
+    showNotification("Starting {targets} pipeline run...", type = "message")
 
-    required_paths <- c(
-      "DIA-NN report" = config$DIA_nn_path,
-      "FASTA file" = config$FASTA_path,
-      "Sample metadata" = config$Sample_data_path
-    )
-
-    missing_paths <- names(required_paths)[!nzchar(unname(required_paths)) | !file.exists(unname(required_paths))]
-    if (length(missing_paths) > 0) {
-      msg <- paste0("Missing required file(s): ", paste(missing_paths, collapse = ", "), ".")
-      showNotification(msg, type = "error")
-      set_pipeline_status("File validation failed")
-      append_log(msg)
-      return()
-    }
-
-    step_labels <- c(
-      import = "Import data",
-      preprocess = "Data preprocessing",
-      dea = "Differential expression analysis",
-      postprocess = "Post-processing",
-      pathway = "Pathway analysis",
-      export = "Export and visualization",
-      report = "Generate report"
-    )
-
-    analysis_data$plot_functions <- list()
-    analysis_data$running <- TRUE
-    set_pipeline_status("Running analysis...")
-    analysis_data$logs <- character()
-    append_log("Pipeline started")
-
-    analysis_data$pipeline_graph <- tryCatch({
-      current_dir <- getwd()
-      on.exit({
-        if (!identical(current_dir, getwd())) {
-          setwd(current_dir)
-        }
-      }, add = TRUE)
-      if (!identical(normalizePath(current_dir, winslash = "/", mustWork = FALSE), repo_root)) {
-        setwd(repo_root)
-      }
-      targets::tar_visnetwork(callr_function = NULL)
-    }, error = function(e) {
-      append_log(paste0("Warning: unable to render targets graph - ", e$message))
-      NULL
-    })
-
-    withProgress(message = "Executing pipeline", value = 0, {
-      captured_output <- character()
-      prepared_config <- NULL
-      pipeline_state <- NULL
-      setProgress(value = 0, detail = "Preparing configuration...")
-
-      result <- tryCatch({
-        local_config <- prepare_pipeline_config(config = config, repo_root = repo_root)
-        local_state <- NULL
-
-        captured_output <<- capture.output({
-          withCallingHandlers({
-            local_state <<- run_full_pipeline(
-              local_config,
-              callbacks = list(
-                on_step_start = function(step, index, total) {
-                  label <- step_labels[[step]] %||% step
-                  append_log(sprintf("Starting %s (%d/%d)", label, index, total))
-                  set_pipeline_status(sprintf("Running %s (%d/%d)", label, index, total))
-                  setProgress(
-                    value = (index - 1) / total,
-                    detail = sprintf("Running %s...", label)
-                  )
-                },
-                on_step_complete = function(step, index, total) {
-                  label <- step_labels[[step]] %||% step
-                  append_log(sprintf("Completed %s (%d/%d)", label, index, total))
-                  setProgress(
-                    value = index / total,
-                    detail = sprintf("Completed %s", label)
-                  )
-                }
-              )
-            )
-          },
-          message = function(m) {
-            append_log(m$message)
-            invokeRestart("muffleMessage")
-          },
-          warning = function(w) {
-            append_log(paste0("Warning: ", w$message))
-            invokeRestart("muffleWarning")
-          })
-        }, type = "output")
-
-        prepared_config <<- local_config
-        pipeline_state <<- local_state
-        TRUE
-      }, error = function(e) {
-        append_log(paste0("Error: ", e$message))
-        setProgress(value = 1, detail = "Pipeline failed")
-        showNotification(paste("Pipeline failed:", e$message), type = "error")
-        FALSE
+    log_messages <- character()
+    result <- tryCatch({
+      withCallingHandlers({
+        app_run_targets_pipeline(repo_root)
+      },
+      message = function(m) {
+        log_messages <<- c(log_messages, m$message)
+        invokeRestart("muffleMessage")
+      },
+      warning = function(w) {
+        log_messages <<- c(log_messages, paste("Warning:", w$message))
+        invokeRestart("muffleWarning")
       })
-
-      if (length(captured_output)) {
-        append_log(captured_output)
-      }
-
-      if (isTRUE(result) && !is.null(pipeline_state$qf)) {
-        analysis_data$qf <- pipeline_state$qf
-        analysis_data$Norm_method <- prepared_config$Norm_method
-        analysis_data$results_folder <- prepared_config$results_folder
-        analysis_data$config <- prepared_config
-        set_pipeline_status("Analysis completed")
-        setProgress(value = 1, detail = "Pipeline completed successfully")
-        append_log("Pipeline completed successfully")
-
-        analysis_data$plot_functions <- build_plot_wrappers(
-          pipeline_state = pipeline_state,
-          qf = pipeline_state$qf,
-          config = prepared_config
-        )
-      } else if (!isTRUE(result)) {
-        set_pipeline_status("Pipeline failed")
-        setProgress(value = 1, detail = "Pipeline failed")
-      } else {
-        set_pipeline_status("Pipeline finished without returning results")
-        showNotification("Pipeline finished but no results were produced.", type = "warning")
-        setProgress(value = 1, detail = "Pipeline finished without results")
-      }
+      TRUE
+    }, error = function(e) {
+      log_messages <<- c(log_messages, paste("Error:", e$message))
+      showNotification(paste("Pipeline run failed:", e$message), type = "error")
+      FALSE
     })
 
-    analysis_data$running <- FALSE
+    run_log(log_messages)
 
-    if (analysis_data$status == "Analysis completed" && isTRUE(config$Run_Interactive)) {
-      append_log("Launching interactive dashboard...")
-      shiny::runApp(file.path(repo_root, "app"))
+    if (isTRUE(result)) {
+      showNotification("Pipeline run completed.", type = "message")
     }
-  })
 
-  output$pipeline_network <- visNetwork::renderVisNetwork({
-    graph <- analysis_data$pipeline_graph
-    if (is.null(graph)) {
-      nodes <- data.frame(
-        id = "awaiting_run",
-        label = "Launch the pipeline to view the targets graph.",
+    outdated_targets(tryCatch(app_targets_outdated(repo_root), error = function(e) character()))
+    meta_data(tryCatch(app_targets_meta(repo_root), error = function(e) data.frame()))
+    cfg <- runtime_config()
+    res_info <- app_collect_results(cfg, repo_root)
+    files <- res_info$files
+    if (!length(files)) {
+      results_listing(data.frame())
+    } else {
+      rel_paths <- files
+      repo_prefix <- paste0(repo_root, "/")
+      rel_paths[startsWith(rel_paths, repo_prefix)] <- substring(rel_paths[startsWith(rel_paths, repo_prefix)], nchar(repo_prefix) + 1)
+      results_listing(data.frame(
+        name = basename(files),
+        path = rel_paths,
         stringsAsFactors = FALSE
-      )
-      edges <- data.frame(from = character(), to = character(), stringsAsFactors = FALSE)
-      return(visNetwork::visNetwork(nodes, edges))
+      ))
     }
-    graph
   })
 
-  observeEvent(analysis_data$plot_functions, {
-    if (!length(analysis_data$plot_functions)) {
-      return()
+  output$outdated_table <- DT::renderDT({
+    targets <- outdated_targets()
+    if (!length(targets)) {
+      return(DT::datatable(data.frame(Status = "All targets up to date"), options = list(dom = "t"), rownames = FALSE))
     }
-
-    output$norm_plots <- renderUI({
-      if (!length(analysis_data$plot_functions)) {
-        return(helpText("Run the pipeline to see normalisation diagnostics."))
-      }
-      norm_fns <- c("Density_plotter", "Norm_boxplotter")
-      missing <- setdiff(norm_fns, names(analysis_data$plot_functions))
-      if (length(missing)) {
-        return(helpText(paste("Missing plotting functions:", paste(missing, collapse = ", "))))
-      }
-
-      tagList(norm_cards)
-    })
-
-    output$agg_plot <- renderPlot({
-      fn <- analysis_data$plot_functions$Aggregation_plotter
-      if (is.null(fn)) {
-        return(NULL)
-      }
-      fn()
-    })
-
-    output$volcano_plot <- renderPlot({
-      fn <- analysis_data$plot_functions$Volcano_plotter
-      if (is.null(fn)) {
-        return(NULL)
-      }
-      fn()
-    })
-
-    output$volcano_plot_highlight <- renderPlot({
-      fn <- analysis_data$plot_functions$Volcano_plotter_highlight
-      if (is.null(fn)) {
-        return(NULL)
-      }
-      fn()
-    })
-
-    output$heatmap <- renderPlot({
-      fn <- analysis_data$plot_functions$make_heatmap
-      if (is.null(fn)) {
-        return(NULL)
-      }
-      fn()
-    })
-
-    output$pca_plot <- renderPlot({
-      fn <- analysis_data$plot_functions$PCA_plotter
-      if (is.null(fn)) {
-        return(NULL)
-      }
-      fn()
-    })
-
-    output$pre_norm_dens <- renderPlotly({
-      fn <- analysis_data$plot_functions$Density_plotter
-      if (is.null(fn)) {
-        return(NULL)
-      }
-      fn(type = "raw")
-    })
-
-    output$post_norm_dens <- renderPlotly({
-      fn <- analysis_data$plot_functions$Density_plotter
-      if (is.null(fn)) {
-        return(NULL)
-      }
-      fn(type = "normalized")
-    })
-
-    output$pre_norm_box <- renderPlot({
-      fn <- analysis_data$plot_functions$Norm_boxplotter
-      if (is.null(fn)) {
-        return(NULL)
-      }
-      fn(type = "raw")
-    })
-
-    output$post_norm_box <- renderPlot({
-      fn <- analysis_data$plot_functions$Norm_boxplotter
-      if (is.null(fn)) {
-        return(NULL)
-      }
-      fn(type = "normalized")
-    })
-
-    output$boxplot_plot <- renderPlot({
-      fn <- analysis_data$plot_functions$Boxplot_plotter
-      if (is.null(fn)) {
-        return(NULL)
-      }
-      fn()
-    })
-
-    output$barplot_ids <- renderPlot({
-      fn <- analysis_data$plot_functions$Barplot_IDs
-      if (is.null(fn)) {
-        return(NULL)
-      }
-      fn()
-    })
-
-    output$missingness_heatmap <- renderPlot({
-      fn <- analysis_data$plot_functions$miss_map
-      if (is.null(fn)) {
-        return(NULL)
-      }
-      fn()
-    })
-  })
-
-  output$analysis_summary <- renderDT({
-    if (is.null(analysis_data$qf)) {
-      return(NULL)
-    }
-    qf <- analysis_data$qf
-
-    norm_method <- analysis_data$Norm_method
-
-    stats <- data.frame(
-      Metric = c(
-        "Number of assays",
-        "Number of features",
-        "Number of proteins",
-        "Normalization method"
-      ),
-      Value = c(
-        length(BiocParallel::bpparam("SerialParam")),
-        nrow(qf),
-        length(unique(qf$protein_group)),
-        norm_method
-      ),
-      stringsAsFactors = FALSE
-    )
-
-    datatable(
-      stats,
-      options = list(pageLength = 5, dom = "tip"),
-      rownames = FALSE,
-      caption = "Analysis summary"
+    DT::datatable(
+      data.frame(Target = targets, stringsAsFactors = FALSE),
+      options = list(pageLength = 10),
+      rownames = FALSE
     )
   })
 
+  output$meta_table <- DT::renderDT({
+    meta <- meta_data()
+    if (!nrow(meta)) {
+      return(DT::datatable(data.frame(Message = "No completed runs yet."), options = list(dom = "t"), rownames = FALSE))
+    }
+    meta$seconds <- round(meta$seconds, 2)
+    meta$warnings <- vapply(meta$warnings, function(x) {
+      if (is.null(x) || !length(x)) "" else paste(x, collapse = "\n")
+    }, character(1))
+    meta$error <- vapply(meta$error, function(x) {
+      if (is.null(x) || !length(x)) "" else paste(x, collapse = "\n")
+    }, character(1))
+    meta$started <- as.character(meta$started)
+    meta$finished <- as.character(meta$finished)
+    DT::datatable(meta, options = list(pageLength = 10))
+  })
+
+  output$run_log <- renderText({
+    log <- run_log()
+    if (!length(log)) {
+      "Pipeline output will appear here after the next run."
+    } else {
+      paste(log, collapse = "\n")
+    }
+  })
+
+  output$report_link <- renderUI({
+    cfg <- runtime_config()
+    res_info <- app_collect_results(cfg, repo_root)
+    report_file <- tryCatch({
+      old_dir <- setwd(repo_root)
+      on.exit(setwd(old_dir))
+      targets::tar_read(report_file, store = app_targets_store(repo_root))
+    }, error = function(e) NA_character_)
+    if (is.null(report_file) || (length(report_file) && is.na(report_file))) {
+      report_file <- res_info$report_file
+    }
+    if (!is.na(report_file) && file.exists(report_file)) {
+      rel <- report_file
+      repo_prefix <- paste0(repo_root, "/")
+      if (startsWith(rel, repo_prefix)) {
+        rel <- substring(rel, nchar(repo_prefix) + 1)
+      }
+      tags$p(tags$a(href = rel, rel = "noopener", target = "_blank", "Open generated report"))
+    } else {
+      tags$p("Report has not been generated yet.")
+    }
+  })
+
+  output$results_table <- DT::renderDT({
+    listing <- results_listing()
+    if (!nrow(listing)) {
+      return(DT::datatable(data.frame(Message = "No exported files detected."), options = list(dom = "t"), rownames = FALSE))
+    }
+    DT::datatable(listing, options = list(pageLength = 15))
+  })
 }
