@@ -1,8 +1,32 @@
 # Functions that wrap the legacy pipeline scripts so they can be executed
 # as pure functions within a {targets} workflow or from other R contexts.
 
+load_pipeline_packages <- function(packages = NULL) {
+  if (is.null(packages)) {
+    packages <- if (exists("pipeline_required_packages", mode = "function")) {
+      pipeline_required_packages()
+    } else {
+      character()
+    }
+  }
+
+  packages <- unique(packages)
+
+  for (pkg in packages) {
+    if (!requireNamespace(pkg, quietly = TRUE)) {
+      stop(sprintf("Required package '%s' is not installed.", pkg))
+    }
+    suppressPackageStartupMessages(
+      library(pkg, character.only = TRUE)
+    )
+  }
+
+  invisible(packages)
+}
+
 create_pipeline_helpers_env <- function(repo_root) {
   helpers <- new.env(parent = baseenv())
+  load_pipeline_packages()
   sys.source(file.path(repo_root, "R", "pipeline_functions.R"), envir = helpers)
   helpers
 }

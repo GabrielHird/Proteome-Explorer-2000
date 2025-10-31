@@ -165,7 +165,8 @@ function(input, output, session) {
     logs = character(),
     status = "Awaiting analysis",
     running = FALSE,
-    plot_functions = list()
+    plot_functions = list(),
+    pipeline_graph = NULL
   )
 
   append_log <- function(text) {
@@ -399,6 +400,13 @@ function(input, output, session) {
     analysis_data$logs <- character()
     append_log("Pipeline started")
 
+    analysis_data$pipeline_graph <- tryCatch({
+      targets::tar_visnetwork(callr_function = NULL)
+    }, error = function(e) {
+      append_log(paste0("Warning: unable to render targets graph - ", e$message))
+      NULL
+    })
+
     withProgress(message = "Executing pipeline", value = 0, {
       captured_output <- character()
       prepared_config <- NULL
@@ -473,6 +481,20 @@ function(input, output, session) {
       append_log("Launching interactive dashboard...")
       shiny::runApp(file.path(repo_root, "app"))
     }
+  })
+
+  output$pipeline_network <- visNetwork::renderVisNetwork({
+    graph <- analysis_data$pipeline_graph
+    if (is.null(graph)) {
+      nodes <- data.frame(
+        id = "awaiting_run",
+        label = "Launch the pipeline to view the targets graph.",
+        stringsAsFactors = FALSE
+      )
+      edges <- data.frame(from = character(), to = character(), stringsAsFactors = FALSE)
+      return(visNetwork::visNetwork(nodes, edges))
+    }
+    graph
   })
 
   observeEvent(analysis_data$plot_functions, {
