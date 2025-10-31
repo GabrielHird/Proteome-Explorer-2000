@@ -23,7 +23,7 @@ load_pipeline_packages <- function(packages = NULL) {
 
   if ("conflicted" %in% loadedNamespaces()) {
     conflicted::conflicts_prefer(
-      QFeatures::longForm,
+      QFeatures::longFormat,
       dplyr::slice,
       dplyr::filter,
       dplyr::rename,

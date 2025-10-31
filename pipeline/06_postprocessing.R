@@ -37,7 +37,7 @@ miss_map <- function(qf, i = "") {
 
 Density_plotter <- function(qf, i = "") {
   p <- qf[[i]] %>%
-    QFeatures::longForm() %>%
+    longFormat() %>%
     as_tibble() %>% 
     ggplot(aes(x = value, group = colname, color = colname)) +
     geom_density() +
@@ -49,7 +49,7 @@ Density_plotter <- function(qf, i = "") {
 
 Norm_boxplotter <- function(qf, i = "") {
   p <- qf[[i]] %>%
-    QFeatures::longForm() %>%
+    longFormat() %>%
     as_tibble() %>% 
     ggplot(aes(x = colname, y=value)) +
     geom_boxplot() +
@@ -74,7 +74,7 @@ Aggregation_plotter <- function(qf, gene) {
   # Get data
   feature_data <- subsetByFeature(qf, pg)
   df <- feature_data[,,c("PeptidesNorm", "Proteins")] %>%
-    QFeatures::longForm(colvars = c("group")) %>%
+    longFormat(colvars = c("group")) %>%
     as_tibble() %>% 
     mutate(assay_order = factor(
       assay,
@@ -280,7 +280,7 @@ Boxplot_plotter <- function(qf, Boxplot_prot = "") {
   plots <- list()
   
   for (prot in Boxplot_prot) {
-    df <- QFeatures::longForm(qf[, , "Results"],
+    df <- longFormat(qf[, , "Results"],
                                 colvars = c("group"),
                                 rowvars = c("Protein.Names", "Gene", "First.Protein.Description")) %>% 
       as_tibble() %>% 
@@ -321,7 +321,7 @@ BatchBoxplot_plotter <- function(qf, Boxplot_prot = "", subtitle = "") {
   plots <- list()
   
   for (prot in Boxplot_prot) {
-    df <- QFeatures::longForm(qf[, , "Proteins"],
+    df <- longFormat(qf[, , "Proteins"],
                                 colvars = c("group", "Extraction_batch"),
                                 rowvars = c("Protein.Names", "Gene", "First.Protein.Description")) %>% 
       as_tibble() %>% 
@@ -461,7 +461,7 @@ Line_profile_plotter <- function(qf,
                                             "Cancer" = "#006D77") ) {
                                    
   # Data setup                                 
-  df <- QFeatures::longForm(qf[, , i],
+  df <- longFormat(qf[, , i],
                              colvars = c("group"),
                              rowvars = c("Gene")) %>%
    as_tibble() %>%
