@@ -36,8 +36,8 @@ miss_map <- function(qf, i = "") {
 # Normalization -----------------------------------------------------------------
 
 Density_plotter <- function(qf, i = "") {
-  p <- qf[[i]] %>% 
-    longFormat() %>% 
+  p <- qf[[i]] %>%
+    QFeatures::longForm() %>%
     as_tibble() %>% 
     ggplot(aes(x = value, group = colname, color = colname)) +
     geom_density() +
@@ -48,8 +48,8 @@ Density_plotter <- function(qf, i = "") {
 }
 
 Norm_boxplotter <- function(qf, i = "") {
-  p <- qf[[i]] %>% 
-    longFormat() %>% 
+  p <- qf[[i]] %>%
+    QFeatures::longForm() %>%
     as_tibble() %>% 
     ggplot(aes(x = colname, y=value)) +
     geom_boxplot() +
@@ -73,8 +73,8 @@ Aggregation_plotter <- function(qf, gene) {
   
   # Get data
   feature_data <- subsetByFeature(qf, pg)
-  df <- feature_data[,,c("PeptidesNorm", "Proteins")] %>% 
-    longFormat(colvars = c("group")) %>%
+  df <- feature_data[,,c("PeptidesNorm", "Proteins")] %>%
+    QFeatures::longForm(colvars = c("group")) %>%
     as_tibble() %>% 
     mutate(assay_order = factor(
       assay,
@@ -119,8 +119,34 @@ make_heatmap <- function(qf,
     names(annot_args) <- names(annot_list)
     
     if ("group" %in% names(annot_list)) {
-      if (is.null(col_list)) col_list <- list(group = get("Group_colors", envir = .GlobalEnv))
-      else col_list$group <- get("Group_colors", envir = .GlobalEnv)
+      group_values <- unique(as.character(colData(qf)[["group"]]))
+      group_values <- group_values[!is.na(group_values) & nzchar(group_values)]
+      if (length(group_values)) {
+        group_colors <- tryCatch(get("Group_colors", envir = .GlobalEnv), error = function(...) NULL)
+        available <- NULL
+        if (!is.null(group_colors)) {
+          group_colors <- stats::setNames(as.character(group_colors), names(group_colors))
+          available <- group_colors[names(group_colors) %in% group_values]
+        } else if (!is.null(col_list) && !is.null(col_list$group)) {
+          available <- col_list$group
+        }
+        if (is.null(available)) {
+          available <- grDevices::rainbow(length(group_values))
+          names(available) <- group_values
+        } else {
+          available <- as.character(available)
+          if (is.null(names(available)) || any(!nzchar(names(available)))) {
+            names(available) <- group_values[seq_along(available)]
+          }
+        }
+        missing_levels <- setdiff(group_values, names(available))
+        if (length(missing_levels)) {
+          fallback <- grDevices::rainbow(length(missing_levels))
+          names(fallback) <- missing_levels
+          available <- c(available, fallback)
+        }
+        if (is.null(col_list)) col_list <- list(group = available) else col_list$group <- available
+      }
     }
     
     annot_args$col <- col_list
@@ -150,7 +176,7 @@ make_heatmap <- function(qf,
   mat <- t(scale(t(mat)))
   
   # color
-  library(circlize)
+  suppressPackageStartupMessages(library(circlize))
   col_fun = colorRamp2(c(-2, 0, 2), c("#327ebaff", "white", "#e06663ff") )
   col_fun(seq(-3,3))
   
@@ -254,7 +280,7 @@ Boxplot_plotter <- function(qf, Boxplot_prot = "") {
   plots <- list()
   
   for (prot in Boxplot_prot) {
-    df <- QFeatures::longFormat(qf[, , "Results"],
+    df <- QFeatures::longForm(qf[, , "Results"],
                                 colvars = c("group"),
                                 rowvars = c("Protein.Names", "Gene", "First.Protein.Description")) %>% 
       as_tibble() %>% 
@@ -295,7 +321,7 @@ BatchBoxplot_plotter <- function(qf, Boxplot_prot = "", subtitle = "") {
   plots <- list()
   
   for (prot in Boxplot_prot) {
-    df <- QFeatures::longFormat(qf[, , "Proteins"],
+    df <- QFeatures::longForm(qf[, , "Proteins"],
                                 colvars = c("group", "Extraction_batch"),
                                 rowvars = c("Protein.Names", "Gene", "First.Protein.Description")) %>% 
       as_tibble() %>% 
@@ -435,7 +461,7 @@ Line_profile_plotter <- function(qf,
                                             "Cancer" = "#006D77") ) {
                                    
   # Data setup                                 
-  df <- QFeatures::longFormat(qf[, , i],
+  df <- QFeatures::longForm(qf[, , i],
                              colvars = c("group"),
                              rowvars = c("Gene")) %>%
    as_tibble() %>%

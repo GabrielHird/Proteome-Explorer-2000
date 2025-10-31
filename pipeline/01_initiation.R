@@ -85,7 +85,7 @@ pix <- function(n) {
   n*0.0104166667
 }
 
-conflicts_prefer(QFeatures::longFormat,
+conflicts_prefer(QFeatures::longForm,
                  dplyr::slice,
                  dplyr::filter,
                  dplyr::rename,

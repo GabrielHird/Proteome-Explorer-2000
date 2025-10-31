@@ -238,6 +238,16 @@ if(Batch_corr == "comBat") {
 
 # Aggregate to Proteins ---------------------------------------------------
 
+if (!exists("fun_agg")) {
+  if(Agg_method == "maxlfq") {
+    fun_agg <- maxLFQ_wrapper
+  } else if(Agg_method == "robustsummary") {
+    fun_agg <- robustSummary_quiet
+  } else if(Agg_method == "medianpolish") {
+    fun_agg <- MsCoreUtils::medianPolish
+  }
+}
+
 message("Starting Peptide aggregation...")
 qf <- aggregateFeatures(qf,
                         i = "PeptidesProccessed",
