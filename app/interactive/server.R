@@ -178,6 +178,174 @@ function(input, output, session) {
     normalizePath(target, winslash = "/", mustWork = FALSE)
   }
 
+  build_plot_wrappers <- function(pipeline_state, qf, config) {
+    if (is.null(qf)) {
+      return(list())
+    }
+
+    get_fn <- function(name) {
+      fn <- pipeline_state[[name]]
+      if (!is.function(fn)) {
+        return(NULL)
+      }
+      fn
+    }
+
+    available_assays <- names(qf)
+    pick_assay <- function(candidates) {
+      found <- intersect(candidates, available_assays)
+      if (length(found)) {
+        found[[1]]
+      } else if (length(candidates)) {
+        candidates[[1]]
+      } else {
+        character(0)
+      }
+    }
+
+    get_available_genes <- function() {
+      if (!"Results" %in% available_assays) {
+        return(character())
+      }
+      rd <- SummarizedExperiment::rowData(qf[["Results"]])
+      if (is.null(rd$Gene)) {
+        return(character())
+      }
+      unique(as.character(rd$Gene[!is.na(rd$Gene) & nzchar(rd$Gene)]))
+    }
+
+    select_gene <- function(preferred) {
+      available <- get_available_genes()
+      preferred <- preferred %||% character()
+      preferred <- preferred[!is.na(preferred) & nzchar(preferred)]
+      choice <- intersect(preferred, available)
+      if (length(choice)) {
+        return(choice[[1]])
+      }
+      if (length(available)) {
+        return(available[[1]])
+      }
+      NA_character_
+    }
+
+    wrappers <- list()
+
+    barplot_fn <- get_fn("Barplot_IDs")
+    if (!is.null(barplot_fn)) {
+      wrappers$Barplot_IDs <- function() {
+        assay_name <- pick_assay(c("Proteins", "Results"))
+        barplot_fn(qf, i = assay_name %||% "", color = "group", sort = "Counts")
+      }
+    }
+
+    miss_map_fn <- get_fn("miss_map")
+    if (!is.null(miss_map_fn)) {
+      wrappers$miss_map <- function() {
+        miss_map_fn(qf, i = pick_assay(c("Proteins", "Results")))
+      }
+    }
+
+    density_fn <- get_fn("Density_plotter")
+    if (!is.null(density_fn)) {
+      wrappers$Density_plotter <- function(type = c("raw", "normalized")) {
+        type <- match.arg(type)
+        assay_name <- if (identical(type, "normalized")) {
+          pick_assay(c("PeptidesProccessed", "PeptidesNorm"))
+        } else {
+          pick_assay(c("Peptides", "PrecursorsLog", "Precursors"))
+        }
+        plotly::ggplotly(density_fn(qf, i = assay_name %||% ""))
+      }
+    }
+
+    boxplot_fn <- get_fn("Norm_boxplotter")
+    if (!is.null(boxplot_fn)) {
+      wrappers$Norm_boxplotter <- function(type = c("raw", "normalized")) {
+        type <- match.arg(type)
+        assay_name <- if (identical(type, "normalized")) {
+          pick_assay(c("PeptidesProccessed", "PeptidesNorm"))
+        } else {
+          pick_assay(c("Peptides", "PrecursorsLog", "Precursors"))
+        }
+        boxplot_fn(qf, i = assay_name %||% "")
+      }
+    }
+
+    agg_fn <- get_fn("Aggregation_plotter")
+    if (!is.null(agg_fn)) {
+      wrappers$Aggregation_plotter <- function() {
+        gene <- select_gene(config$Agg_prot)
+        if (is.na(gene)) {
+          return(NULL)
+        }
+        tryCatch(agg_fn(qf, gene = gene), error = function(e) {
+          append_log(paste("Aggregation plot failed:", e$message))
+          NULL
+        })
+      }
+    }
+
+    volcano_fn <- get_fn("Volcano_plotter")
+    if (!is.null(volcano_fn)) {
+      wrappers$Volcano_plotter <- function() {
+        volcano_fn(qf)
+      }
+    }
+
+    volcano_highlight_fn <- get_fn("Volcano_plotter_highlight")
+    if (!is.null(volcano_highlight_fn)) {
+      wrappers$Volcano_plotter_highlight <- function() {
+        gene <- select_gene(config$Boxplot_prot)
+        if (is.na(gene)) {
+          return(NULL)
+        }
+        volcano_highlight_fn(qf, gene = gene)
+      }
+    }
+
+    heatmap_fn <- get_fn("make_heatmap")
+    if (!is.null(heatmap_fn)) {
+      wrappers$make_heatmap <- function() {
+        heatmap_obj <- heatmap_fn(
+          qf,
+          i = pick_assay(c("Results", "Proteins")),
+          annot_list = config$heatmap_annot,
+          only_significant = TRUE,
+          n = 25,
+          title = "Significant proteins"
+        )
+        if (is.null(heatmap_obj)) {
+          return(NULL)
+        }
+        grid::grid.newpage()
+        ComplexHeatmap::draw(heatmap_obj)
+        invisible(NULL)
+      }
+    }
+
+    pca_fn <- get_fn("PCA_plotter")
+    if (!is.null(pca_fn)) {
+      wrappers$PCA_plotter <- function() {
+        assay_name <- pick_assay(c("Proteins", "Results"))
+        pca_fn(qf, i = assay_name %||% "", color = "group", label = "none")
+      }
+    }
+
+    boxplot_prot_fn <- get_fn("Boxplot_plotter")
+    if (!is.null(boxplot_prot_fn)) {
+      wrappers$Boxplot_plotter <- function() {
+        plots <- boxplot_prot_fn(qf, Boxplot_prot = config$Boxplot_prot)
+        if (is.list(plots) && length(plots)) {
+          return(plots[[1]])
+        }
+        ggplot2::ggplot() + ggplot2::labs(title = "No boxplot data available") +
+          ggplot2::theme_void()
+      }
+    }
+
+    wrappers
+  }
+
   analysis_data <- reactiveValues(
     qf = NULL,
     Norm_method = default_config$Norm_method,
@@ -515,22 +683,11 @@ function(input, output, session) {
         setProgress(value = 1, detail = "Pipeline completed successfully")
         append_log("Pipeline completed successfully")
 
-        required_functions <- c(
-          "Barplot_IDs",
-          "miss_map",
-          "Density_plotter",
-          "Norm_boxplotter",
-          "Aggregation_plotter",
-          "Boxplot_plotter",
-          "Volcano_plotter",
-          "Volcano_plotter_highlight",
-          "make_heatmap",
-          "PCA_plotter"
+        analysis_data$plot_functions <- build_plot_wrappers(
+          pipeline_state = pipeline_state,
+          qf = pipeline_state$qf,
+          config = prepared_config
         )
-
-        analysis_data$plot_functions <- lapply(setNames(required_functions, required_functions), function(fn) {
-          pipeline_state[[fn]] %||% NULL
-        })
       } else if (!isTRUE(result)) {
         set_pipeline_status("Pipeline failed")
         setProgress(value = 1, detail = "Pipeline failed")

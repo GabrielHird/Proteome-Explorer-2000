@@ -161,6 +161,9 @@ run_full_pipeline <- function(config,
     report = run_report
   )
 
+  last_qf <- NULL
+  function_cache <- list()
+
   for (i in seq_along(steps)) {
     step <- steps[[i]]
     fn <- step_functions[[step]]
@@ -171,8 +174,28 @@ run_full_pipeline <- function(config,
       callbacks$on_step_start(step = step, index = i, total = total_steps)
     }
     state <- fn(config, state, helpers_env = helpers_env)
+    if (!is.null(state$qf)) {
+      last_qf <- state$qf
+    }
+    if (length(state)) {
+      fn_names <- names(state)[vapply(state, is.function, logical(1), USE.NAMES = FALSE)]
+      if (length(fn_names)) {
+        function_cache[fn_names] <- state[fn_names]
+      }
+    }
     if (!is.null(callbacks$on_step_complete)) {
       callbacks$on_step_complete(step = step, index = i, total = total_steps)
+    }
+  }
+
+  if (is.null(state$qf) && !is.null(last_qf)) {
+    state$qf <- last_qf
+  }
+
+  if (length(function_cache)) {
+    missing_fns <- setdiff(names(function_cache), names(state))
+    if (length(missing_fns)) {
+      state[missing_fns] <- function_cache[missing_fns]
     }
   }
 
