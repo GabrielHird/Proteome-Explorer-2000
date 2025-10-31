@@ -9,6 +9,7 @@ suppressPackageStartupMessages({
   library(DT)
   library(bsicons)
   library(visNetwork)
+  library(targets)
 })
 
 `%||%` <- function(x, y) {

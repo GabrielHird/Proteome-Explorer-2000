@@ -279,7 +279,7 @@ Membrane = PExA_membrane",
           )
         )
       )
-  )
+  ),
 
   nav_panel(
     "Results",
@@ -460,6 +460,7 @@ Membrane = PExA_membrane",
         )
       )
     )
-  ),
+  )
+  )
 
 )
