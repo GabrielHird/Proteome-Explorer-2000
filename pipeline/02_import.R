@@ -75,10 +75,10 @@ if(First_pass == TRUE) {
   if(Agg_method == "maxlfq") {
     fun_agg <- maxLFQ_wrapper
   } else if(Agg_method == "robustsummary") {
-    fun_agg <- MsCoreUtils::robustSummary
+    fun_agg <- robustSummary_quiet
   } else if(Agg_method == "medianpolish") {
     fun_agg <- MsCoreUtils::medianPolish
-  } 
+  }
   
   message("Starting Precursor aggregation...")
   qf <- aggregateFeatures(qf,

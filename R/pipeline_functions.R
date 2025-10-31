@@ -6,6 +6,17 @@ maxLFQ_wrapper <- function(x) {
   iq::maxLFQ(x)$estimate
 }
 
+robustSummary_quiet <- function(...) {
+  withCallingHandlers(
+    MsCoreUtils::robustSummary(...),
+    warning = function(w) {
+      if (grepl("rlm' failed to converge", conditionMessage(w), fixed = TRUE)) {
+        invokeRestart("muffleWarning")
+      }
+    }
+  )
+}
+
 # Create an ExpressionSet -------------------------------------------------
 
 createExpressionSet <- function(df, Sample_data) {
