@@ -120,9 +120,36 @@ run_full_pipeline <- function(config,
                                         "postprocess",
                                         "pathway",
                                         "export",
-                                        "report")) {
+                                        "report"),
+                              callbacks = list()) {
   helpers_env <- create_pipeline_helpers_env(config$repo_root)
   state <- list()
+  total_steps <- length(steps)
+
+  globals_to_expose <- intersect("Group_colors", names(config))
+  original_globals <- list()
+  missing_sentinel <- new.env(parent = emptyenv())
+
+  if (length(globals_to_expose)) {
+    for (nm in globals_to_expose) {
+      if (exists(nm, envir = .GlobalEnv, inherits = FALSE)) {
+        original_globals[[nm]] <- get(nm, envir = .GlobalEnv, inherits = FALSE)
+      } else {
+        original_globals[[nm]] <- missing_sentinel
+      }
+      assign(nm, config[[nm]], envir = .GlobalEnv)
+    }
+
+    on.exit({
+      for (nm in names(original_globals)) {
+        if (identical(original_globals[[nm]], missing_sentinel)) {
+          rm(list = nm, envir = .GlobalEnv)
+        } else {
+          assign(nm, original_globals[[nm]], envir = .GlobalEnv)
+        }
+      }
+    }, add = TRUE)
+  }
 
   step_functions <- list(
     import = run_import,
@@ -134,12 +161,19 @@ run_full_pipeline <- function(config,
     report = run_report
   )
 
-  for (step in steps) {
+  for (i in seq_along(steps)) {
+    step <- steps[[i]]
     fn <- step_functions[[step]]
     if (is.null(fn)) {
       stop(sprintf("Unknown pipeline step '%s'", step))
     }
+    if (!is.null(callbacks$on_step_start)) {
+      callbacks$on_step_start(step = step, index = i, total = total_steps)
+    }
     state <- fn(config, state, helpers_env = helpers_env)
+    if (!is.null(callbacks$on_step_complete)) {
+      callbacks$on_step_complete(step = step, index = i, total = total_steps)
+    }
   }
 
   state
